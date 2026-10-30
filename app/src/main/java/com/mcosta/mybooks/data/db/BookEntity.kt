@@ -1,0 +1,37 @@
+package com.mcosta.mybooks.data.db
+
+import androidx.room.Entity
+import androidx.room.Index
+import androidx.room.PrimaryKey
+import com.mcosta.mybooks.domain.Book
+import com.mcosta.mybooks.domain.ReadingStatus
+
+@Entity(tableName = "books", indices = [Index(value = ["isbn"], unique = true)])
+data class BookEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val isbn: String?,
+    val title: String,
+    val authors: String,
+    val publisher: String?,
+    val publishedYear: Int?,
+    val pageCount: Int?,
+    val coverUrl: String?,
+    val description: String?,
+    val status: ReadingStatus,
+    val rating: Int?,
+    val notes: String,
+    val dateAdded: Long,
+    val dateRead: Long?,
+)
+
+fun BookEntity.toBook() = Book(
+    id = id, isbn = isbn, title = title, authors = authors, publisher = publisher,
+    publishedYear = publishedYear, pageCount = pageCount, coverUrl = coverUrl, description = description,
+    status = status, rating = rating, notes = notes, dateAdded = dateAdded, dateRead = dateRead,
+)
+
+fun Book.toEntity() = BookEntity(
+    id = id, isbn = isbn, title = title, authors = authors, publisher = publisher,
+    publishedYear = publishedYear, pageCount = pageCount, coverUrl = coverUrl, description = description,
+    status = status, rating = rating, notes = notes, dateAdded = dateAdded, dateRead = dateRead,
+)

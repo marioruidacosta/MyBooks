@@ -32,6 +32,13 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.isReturnDefaultValues = true
+        unitTests.all { test ->
+            // Robolectric downloads its Android runtime jars itself; on Windows trust the OS
+            // certificate store so TLS-inspecting networks work.
+            if (System.getProperty("os.name").startsWith("Windows")) {
+                test.systemProperty("javax.net.ssl.trustStoreType", "Windows-ROOT")
+            }
+        }
     }
 }
 
