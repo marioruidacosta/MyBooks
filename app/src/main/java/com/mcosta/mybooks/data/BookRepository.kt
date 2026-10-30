@@ -39,6 +39,8 @@ class BookRepository(
 
     suspend fun getBook(id: Long): Book? = dao.getById(id)?.toBook()
 
+    suspend fun bookCount(): Int = dao.getAll().size
+
     suspend fun findByIsbn(isbn: String): Book? =
         Isbn.normalize(isbn)?.let { dao.findByIsbn(it)?.toBook() }
 

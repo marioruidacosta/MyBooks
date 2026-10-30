@@ -18,6 +18,9 @@ import com.mcosta.mybooks.ui.edit.EditBookScreen
 import com.mcosta.mybooks.ui.edit.EditBookViewModel
 import com.mcosta.mybooks.ui.library.LibraryScreen
 import com.mcosta.mybooks.ui.library.LibraryViewModel
+import com.mcosta.mybooks.ui.settings.ContentResolverIo
+import com.mcosta.mybooks.ui.settings.SettingsScreen
+import com.mcosta.mybooks.ui.settings.SettingsViewModel
 import kotlinx.coroutines.launch
 
 object Routes {
@@ -86,6 +89,12 @@ fun MyBooksNavHost() {
                 viewModel = appViewModel { BookDetailViewModel(it.repository, id, it.applicationScope) },
                 onBack = { nav.popBackStack() },
                 onEdit = { nav.navigate(Routes.edit(id)) },
+            )
+        }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                viewModel = appViewModel { SettingsViewModel(it.repository, ContentResolverIo(context.contentResolver)) },
+                onBack = { nav.popBackStack() },
             )
         }
         composable(Routes.EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
