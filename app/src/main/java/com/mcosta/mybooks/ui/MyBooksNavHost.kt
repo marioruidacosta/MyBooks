@@ -12,6 +12,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.mcosta.mybooks.scan.IsbnScanner
 import com.mcosta.mybooks.scan.ScanOutcome
+import com.mcosta.mybooks.ui.detail.BookDetailScreen
+import com.mcosta.mybooks.ui.detail.BookDetailViewModel
 import com.mcosta.mybooks.ui.edit.EditBookScreen
 import com.mcosta.mybooks.ui.edit.EditBookViewModel
 import com.mcosta.mybooks.ui.library.LibraryScreen
@@ -76,6 +78,14 @@ fun MyBooksNavHost() {
                 onSaved = { id ->
                     nav.navigate(Routes.book(id)) { popUpTo(Routes.LIBRARY) }
                 },
+            )
+        }
+        composable(Routes.BOOK, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+            val id = entry.arguments!!.getLong("id")
+            BookDetailScreen(
+                viewModel = appViewModel { BookDetailViewModel(it.repository, id, it.applicationScope) },
+                onBack = { nav.popBackStack() },
+                onEdit = { nav.navigate(Routes.edit(id)) },
             )
         }
         composable(Routes.EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
