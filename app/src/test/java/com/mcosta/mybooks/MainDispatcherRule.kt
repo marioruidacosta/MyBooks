@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+
 package com.mcosta.mybooks
 
 import kotlinx.coroutines.Dispatchers
