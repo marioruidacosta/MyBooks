@@ -111,6 +111,15 @@ class EditBookViewModelTest {
     }
 
     @Test
+    fun secondSaveWhileSavingOrSavedIsIgnored() = runTest {
+        val vm = EditBookViewModel(repo, bookId = null, isbn = null)
+        vm.update { it.copy(title = "No ISBN") }
+        vm.save()
+        vm.save()
+        assertEquals(1, dao.getAll().size)
+    }
+
+    @Test
     fun nonNumericYearIgnoredAsNull() = runTest {
         val vm = EditBookViewModel(repo, bookId = null, isbn = null)
         vm.update { it.copy(title = "X", year = "abc", pages = " 120 ") }

@@ -3,7 +3,7 @@ package com.mcosta.mybooks.data
 import com.mcosta.mybooks.data.backup.BackupFormatException
 import com.mcosta.mybooks.data.backup.BackupSerializer
 import com.mcosta.mybooks.data.db.BookDao
-import com.mcosta.mybooks.data.db.escapeLike
+import com.mcosta.mybooks.data.db.searchPattern
 import com.mcosta.mybooks.data.db.toBook
 import com.mcosta.mybooks.data.db.toEntity
 import com.mcosta.mybooks.data.lookup.BookLookupService
@@ -33,7 +33,7 @@ class BookRepository(
     private val transactionRunner: suspend (suspend () -> Unit) -> Unit = { it() },
 ) {
     fun observeBooks(status: ReadingStatus?, query: String): Flow<List<Book>> =
-        dao.observe(status, escapeLike(query.trim())).map { list -> list.map { it.toBook() } }
+        dao.observe(status, searchPattern(query)).map { list -> list.map { it.toBook() } }
 
     fun observeBook(id: Long): Flow<Book?> = dao.observeById(id).map { it?.toBook() }
 
@@ -97,7 +97,12 @@ class BookRepository(
                     failed++
                     continue
                 }
-                val existing = book.isbn?.let { dao.findByIsbn(it) }
+                // Books without ISBN match on title + authors, so restoring the same backup twice doesn't duplicate them.
+                val existing = if (book.isbn != null) {
+                    dao.findByIsbn(book.isbn)
+                } else {
+                    dao.findWithoutIsbn(book.title, book.authors.trim())
+                }
                 if (existing != null) {
                     dao.update(withReadDate(book.copy(id = existing.id, dateAdded = existing.dateAdded)).toEntity())
                     updated++

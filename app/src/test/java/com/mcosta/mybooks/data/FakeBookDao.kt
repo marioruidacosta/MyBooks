@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
-/** In-memory [BookDao]. Search does a plain case-insensitive contains (no LIKE escaping). */
+/** In-memory [BookDao]. Search does a plain contains on the folded searchText (no LIKE semantics). */
 class FakeBookDao : BookDao {
     val rows = MutableStateFlow<Map<Long, BookEntity>>(emptyMap())
     private var nextId = 1L
@@ -18,13 +18,17 @@ class FakeBookDao : BookDao {
         val q = unescape(query)
         m.values
             .filter { status == null || it.status == status }
-            .filter { q.isEmpty() || it.title.contains(q, true) || it.authors.contains(q, true) }
+            .filter { q.isEmpty() || it.searchText.contains(q) }
             .sortedBy { it.title.lowercase() }
     }
 
     override fun observeById(id: Long): Flow<BookEntity?> = rows.map { it[id] }
     override suspend fun getById(id: Long) = rows.value[id]
     override suspend fun findByIsbn(isbn: String) = rows.value.values.firstOrNull { it.isbn == isbn }
+    override suspend fun findWithoutIsbn(title: String, authors: String) = rows.value.values.firstOrNull {
+        it.isbn == null && it.title.equals(title, true) && it.authors.equals(authors, true)
+    }
+
     override suspend fun getAll() = rows.value.values.sortedBy { it.title.lowercase() }
 
     override suspend fun insert(book: BookEntity): Long {

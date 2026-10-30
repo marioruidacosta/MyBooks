@@ -5,6 +5,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
+import com.mcosta.mybooks.domain.searchKey
 
 @Entity(tableName = "books", indices = [Index(value = ["isbn"], unique = true)])
 data class BookEntity(
@@ -22,6 +23,8 @@ data class BookEntity(
     val notes: String,
     val dateAdded: Long,
     val dateRead: Long?,
+    /** [searchKey] of title and authors; what library search matches against. */
+    val searchText: String,
 )
 
 fun BookEntity.toBook() = Book(
@@ -34,4 +37,6 @@ fun Book.toEntity() = BookEntity(
     id = id, isbn = isbn, title = title, authors = authors, publisher = publisher,
     publishedYear = publishedYear, pageCount = pageCount, coverUrl = coverUrl, description = description,
     status = status, rating = rating, notes = notes, dateAdded = dateAdded, dateRead = dateRead,
+    // Newline separator stops a query from matching across the title/author boundary.
+    searchText = searchKey("$title\n$authors"),
 )

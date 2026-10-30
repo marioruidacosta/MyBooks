@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,7 +52,10 @@ fun EditBookScreen(viewModel: EditBookViewModel, isNew: Boolean, onBack: () -> U
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 },
                 actions = {
-                    TextButton(onClick = viewModel::save, enabled = !state.loading) { Text("Save") }
+                    TextButton(
+                        onClick = viewModel::save,
+                        enabled = !state.loading && !state.saving && state.savedId == null,
+                    ) { Text("Save") }
                 },
             )
         },
@@ -84,7 +88,7 @@ fun EditBookScreen(viewModel: EditBookViewModel, isNew: Boolean, onBack: () -> U
             }
             StatusSelector(f.status, { s -> viewModel.update { it.copy(status = s) } }, Modifier.fillMaxWidth())
             RatingStars(f.rating, onRate = { r -> viewModel.update { it.copy(rating = r) } })
-            Field("ISBN", f.isbn, KeyboardType.Number) { v -> viewModel.update { it.copy(isbn = v) } }
+            Field("ISBN", f.isbn, keyboardOptions = isbnKeyboardOptions) { v -> viewModel.update { it.copy(isbn = v) } }
             Field("Publisher", f.publisher) { v -> viewModel.update { it.copy(publisher = v) } }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Field("Year", f.year, KeyboardType.Number, Modifier.weight(1f)) { v -> viewModel.update { it.copy(year = v) } }
@@ -104,6 +108,7 @@ private fun Field(
     keyboardType: KeyboardType = KeyboardType.Text,
     modifier: Modifier = Modifier.fillMaxWidth(),
     singleLine: Boolean = true,
+    keyboardOptions: KeyboardOptions = KeyboardOptions(keyboardType = keyboardType),
     onChange: (String) -> Unit,
 ) {
     OutlinedTextField(
@@ -112,7 +117,13 @@ private fun Field(
         label = { Text(label) },
         singleLine = singleLine,
         minLines = if (singleLine) 1 else 3,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        keyboardOptions = keyboardOptions,
         modifier = modifier,
     )
 }
+
+/** Not numeric: ISBN-10s can end in "X". */
+internal val isbnKeyboardOptions = KeyboardOptions(
+    keyboardType = KeyboardType.Ascii,
+    capitalization = KeyboardCapitalization.Characters,
+)

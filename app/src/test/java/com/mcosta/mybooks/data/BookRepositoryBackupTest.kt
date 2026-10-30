@@ -61,6 +61,30 @@ class BookRepositoryBackupTest {
     }
 
     @Test
+    fun importingSameBackupTwiceDoesNotDuplicateBooksWithoutIsbn() = runTest {
+        val file = backup(Book(title = "Family Recipes", authors = "Grandma", notes = "v1"), Book(title = "Dune", isbn = "9780441013593"))
+        repo.importJson(file)
+        val second = repo.importJson(file)
+        assertEquals(ImportSummary(added = 0, updated = 2, failed = 0), second)
+        assertEquals(2, dao.getAll().size)
+    }
+
+    @Test
+    fun noIsbnMatchIgnoresCaseAndSpaces() = runTest {
+        repo.save(Book(title = "Family Recipes", authors = "Grandma"))
+        val s = repo.importJson(backup(Book(title = "  family recipes ", authors = "GRANDMA", rating = 5)))
+        assertEquals(ImportSummary(added = 0, updated = 1, failed = 0), s)
+        assertEquals(5, dao.getAll().single().rating)
+    }
+
+    @Test
+    fun noIsbnBookDoesNotMatchBookThatHasIsbn() = runTest {
+        repo.save(Book(title = "Dune", authors = "Frank Herbert", isbn = "9780441013593"))
+        val s = repo.importJson(backup(Book(title = "Dune", authors = "Frank Herbert")))
+        assertEquals(ImportSummary(added = 1, updated = 0, failed = 0), s)
+    }
+
+    @Test
     fun importInvalidFileWritesNothing() = runTest {
         repo.save(Book(title = "Keep me"))
         try {

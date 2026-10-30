@@ -33,6 +33,7 @@ data class EditState(
     val loading: Boolean = false,
     val message: String? = null,
     val error: String? = null,
+    val saving: Boolean = false,
     val savedId: Long? = null,
 )
 
@@ -81,6 +82,9 @@ class EditBookViewModel(
     }
 
     fun save() {
+        // Ignore repeat taps: a second insert would duplicate a book without an ISBN.
+        if (_state.value.saving || _state.value.savedId != null) return
+        _state.update { it.copy(saving = true) }
         val f = _state.value.form
         val base = original ?: Book(title = "")
         val book = base.copy(
@@ -99,7 +103,7 @@ class EditBookViewModel(
         viewModelScope.launch {
             val error = when (val r = repo.save(book)) {
                 is SaveResult.Saved -> {
-                    _state.update { it.copy(savedId = r.id, error = null) }
+                    _state.update { it.copy(savedId = r.id, error = null, saving = false) }
                     return@launch
                 }
                 SaveResult.InvalidTitle -> "Title is required"
@@ -107,7 +111,7 @@ class EditBookViewModel(
                 SaveResult.InvalidIsbn -> "Invalid ISBN"
                 SaveResult.InvalidRating -> "Rating must be 1–5"
             }
-            _state.update { it.copy(error = error) }
+            _state.update { it.copy(error = error, saving = false) }
         }
     }
 }

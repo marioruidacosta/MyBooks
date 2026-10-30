@@ -50,22 +50,37 @@ class BookDaoTest {
     fun searchMatchesTitleOrAuthorIgnoringCase() = runTest {
         dao.insert(book("Dune", authors = "Frank Herbert"))
         dao.insert(book("Emma", authors = "Jane Austen"))
-        assertEquals(listOf("Dune"), dao.observe(null, escapeLike("dune")).first().map { it.title })
-        assertEquals(listOf("Dune"), dao.observe(null, escapeLike("HERBERT")).first().map { it.title })
+        assertEquals(listOf("Dune"), dao.observe(null, searchPattern("dune")).first().map { it.title })
+        assertEquals(listOf("Dune"), dao.observe(null, searchPattern("HERBERT")).first().map { it.title })
+    }
+
+    @Test
+    fun searchIgnoresCaseOfAccentedLetters() = runTest {
+        dao.insert(book("Ética a Nicómaco", authors = "Aristóteles"))
+        dao.insert(book("Dune"))
+        assertEquals(listOf("Ética a Nicómaco"), dao.observe(null, searchPattern("ética")).first().map { it.title })
+        assertEquals(listOf("Ética a Nicómaco"), dao.observe(null, searchPattern("ÉTICA")).first().map { it.title })
+    }
+
+    @Test
+    fun searchIgnoresAccents() = runTest {
+        dao.insert(book("Memorial do Convento", authors = "José Saramago"))
+        assertEquals(1, dao.observe(null, searchPattern("jose")).first().size)
+        assertEquals(1, dao.observe(null, searchPattern("Jósé")).first().size)
     }
 
     @Test
     fun searchTreatsPercentLiterally() = runTest {
         dao.insert(book("100% Wolf"))
         dao.insert(book("1000 Wolves"))
-        assertEquals(listOf("100% Wolf"), dao.observe(null, escapeLike("100%")).first().map { it.title })
+        assertEquals(listOf("100% Wolf"), dao.observe(null, searchPattern("100%")).first().map { it.title })
     }
 
     @Test
     fun searchTreatsUnderscoreLiterally() = runTest {
         dao.insert(book("a_b"))
         dao.insert(book("axb"))
-        assertEquals(listOf("a_b"), dao.observe(null, escapeLike("a_b")).first().map { it.title })
+        assertEquals(listOf("a_b"), dao.observe(null, searchPattern("a_b")).first().map { it.title })
     }
 
     @Test
@@ -80,6 +95,15 @@ class BookDaoTest {
         dao.insert(book("Dune", isbn = "9780441013593"))
         assertNotNull(dao.findByIsbn("9780441013593"))
         assertNull(dao.findByIsbn("9780306406157"))
+    }
+
+    @Test
+    fun findWithoutIsbnMatchesTitleAndAuthorsIgnoringCase() = runTest {
+        dao.insert(book("Family Recipes", authors = "Grandma"))
+        dao.insert(book("Dune", authors = "Frank Herbert", isbn = "9780441013593"))
+        assertNotNull(dao.findWithoutIsbn("family recipes", "GRANDMA"))
+        assertNull(dao.findWithoutIsbn("Family Recipes", "Someone else"))
+        assertNull(dao.findWithoutIsbn("Dune", "Frank Herbert"))
     }
 
     @Test(expected = SQLiteConstraintException::class)
