@@ -1,5 +1,7 @@
 package com.mcosta.mybooks.data
 
+import com.mcosta.mybooks.data.backup.BackupFormatException
+import com.mcosta.mybooks.data.backup.BackupSerializer
 import com.mcosta.mybooks.data.db.BookDao
 import com.mcosta.mybooks.data.db.escapeLike
 import com.mcosta.mybooks.data.db.toBook
@@ -20,11 +22,15 @@ sealed interface SaveResult {
     data object InvalidIsbn : SaveResult
 }
 
+data class ImportSummary(val added: Int, val updated: Int, val failed: Int)
+
 /** Single entry point for the UI to read and change the library. */
 class BookRepository(
     private val dao: BookDao,
     private val lookupService: BookLookupService,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Runs a block atomically; the app passes Room's `withTransaction`. */
+    private val transactionRunner: suspend (suspend () -> Unit) -> Unit = { it() },
 ) {
     fun observeBooks(status: ReadingStatus?, query: String): Flow<List<Book>> =
         dao.observe(status, escapeLike(query.trim())).map { list -> list.map { it.toBook() } }
@@ -66,6 +72,40 @@ class BookRepository(
     suspend fun setNotes(id: Long, notes: String) = modify(id) { it.copy(notes = notes) }
 
     suspend fun delete(id: Long) = dao.delete(id)
+
+    suspend fun exportJson(): String = BackupSerializer.encode(dao.getAll().map { it.toBook() }, clock())
+
+    /**
+     * Merges a backup into the library: books whose ISBN is already present are updated, the rest
+     * inserted. Invalid entries (and repeats of an ISBN within the file) are counted as failed.
+     * Throws [BackupFormatException] before writing anything if [json] is not a valid backup.
+     */
+    suspend fun importJson(json: String): ImportSummary {
+        val books = BackupSerializer.decode(json)
+        var added = 0
+        var updated = 0
+        var failed = 0
+        transactionRunner {
+            val seenIsbns = mutableSetOf<String>()
+            for (raw in books) {
+                val book = (validate(raw.copy(id = 0)) as? Validation.Ok)?.book
+                if (book == null || (book.isbn != null && !seenIsbns.add(book.isbn))) {
+                    failed++
+                    continue
+                }
+                val existing = book.isbn?.let { dao.findByIsbn(it) }
+                if (existing != null) {
+                    dao.update(withReadDate(book.copy(id = existing.id, dateAdded = existing.dateAdded)).toEntity())
+                    updated++
+                } else {
+                    val dateAdded = if (book.dateAdded > 0) book.dateAdded else clock()
+                    dao.insert(withReadDate(book.copy(dateAdded = dateAdded)).toEntity())
+                    added++
+                }
+            }
+        }
+        return ImportSummary(added, updated, failed)
+    }
 
     private suspend fun modify(id: Long, change: (Book) -> Book) {
         val book = dao.getById(id)?.toBook() ?: return
