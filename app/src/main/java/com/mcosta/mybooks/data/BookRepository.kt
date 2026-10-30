@@ -37,6 +37,8 @@ class BookRepository(
 
     fun observeBook(id: Long): Flow<Book?> = dao.observeById(id).map { it?.toBook() }
 
+    suspend fun getBook(id: Long): Book? = dao.getById(id)?.toBook()
+
     suspend fun findByIsbn(isbn: String): Book? =
         Isbn.normalize(isbn)?.let { dao.findByIsbn(it)?.toBook() }
 

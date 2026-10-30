@@ -36,4 +36,6 @@ class LibraryViewModel(private val repo: BookRepository) : ViewModel() {
     fun setQuery(q: String) {
         query.value = q
     }
+
+    suspend fun findByIsbn(isbn: String): Book? = repo.findByIsbn(isbn)
 }
