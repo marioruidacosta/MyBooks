@@ -47,11 +47,15 @@ object BackupSerializer {
         val notes: String = "",
         val dateAdded: Long = 0,
         val dateRead: Long? = null,
+        val dateStarted: Long? = null,
+        val currentPage: Int? = null,
+        val progressPercent: Int? = null,
     ) {
         fun toBook() = Book(
             isbn = isbn, title = title, authors = authors, publisher = publisher, publishedYear = publishedYear,
             pageCount = pageCount, coverUrl = coverUrl, description = description, status = status,
             rating = rating, notes = notes, dateAdded = dateAdded, dateRead = dateRead,
+            dateStarted = dateStarted, currentPage = currentPage, progressPercent = progressPercent,
         )
     }
 
@@ -59,5 +63,6 @@ object BackupSerializer {
         isbn = isbn, title = title, authors = authors, publisher = publisher, publishedYear = publishedYear,
         pageCount = pageCount, coverUrl = coverUrl, description = description, status = status,
         rating = rating, notes = notes, dateAdded = dateAdded, dateRead = dateRead,
+        dateStarted = dateStarted, currentPage = currentPage, progressPercent = progressPercent,
     )
 }

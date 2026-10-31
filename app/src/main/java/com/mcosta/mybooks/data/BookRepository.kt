@@ -56,17 +56,17 @@ class BookRepository(
             if (existing != null && existing.id != validated.id) return SaveResult.DuplicateIsbn
         }
         return if (validated.id == 0L) {
-            SaveResult.Saved(dao.insert(withReadDate(validated.copy(dateAdded = clock())).toEntity()))
+            SaveResult.Saved(dao.insert(withStatusDates(validated.copy(dateAdded = clock())).toEntity()))
         } else {
             val stored = dao.getById(validated.id)
             val merged = validated.copy(dateAdded = stored?.dateAdded ?: validated.dateAdded)
-            dao.update(withReadDate(merged).toEntity())
+            dao.update(withStatusDates(merged).toEntity())
             SaveResult.Saved(validated.id)
         }
     }
 
     suspend fun setStatus(id: Long, status: ReadingStatus) =
-        modify(id) { withReadDate(it.copy(status = status)) }
+        modify(id) { withStatusDates(it.copy(status = status)) }
 
     suspend fun setRating(id: Long, rating: Int?) {
         require(rating == null || rating in 1..5) { "rating must be 1..5 or null" }
@@ -74,6 +74,23 @@ class BookRepository(
     }
 
     suspend fun setNotes(id: Long, notes: String) = modify(id) { it.copy(notes = notes) }
+
+    /** Progress by page; the percentage follows from the page count when known (capped at 100). */
+    suspend fun setProgressPages(id: Long, page: Int) {
+        require(page >= 0) { "page must be >= 0" }
+        modify(id) { book ->
+            val percent = book.pageCount?.takeIf { it > 0 }?.let { minOf(100, page * 100 / it) }
+            book.copy(currentPage = page, progressPercent = percent)
+        }
+    }
+
+    /** Progress by percentage, for books without a page count or read as ebooks. */
+    suspend fun setProgressPercent(id: Long, percent: Int) {
+        require(percent in 0..100) { "percent must be 0..100" }
+        modify(id) { it.copy(currentPage = null, progressPercent = percent) }
+    }
+
+    suspend fun setDateStarted(id: Long, date: Long) = modify(id) { it.copy(dateStarted = date) }
 
     suspend fun delete(id: Long) = dao.delete(id)
 
@@ -104,11 +121,11 @@ class BookRepository(
                     dao.findWithoutIsbn(book.title, book.authors.trim())
                 }
                 if (existing != null) {
-                    dao.update(withReadDate(book.copy(id = existing.id, dateAdded = existing.dateAdded)).toEntity())
+                    dao.update(withStatusDates(book.copy(id = existing.id, dateAdded = existing.dateAdded)).toEntity())
                     updated++
                 } else {
                     val dateAdded = if (book.dateAdded > 0) book.dateAdded else clock()
-                    dao.insert(withReadDate(book.copy(dateAdded = dateAdded)).toEntity())
+                    dao.insert(withStatusDates(book.copy(dateAdded = dateAdded)).toEntity())
                     added++
                 }
             }
@@ -121,10 +138,15 @@ class BookRepository(
         dao.update(change(book).toEntity())
     }
 
-    private fun withReadDate(book: Book): Book = when {
-        book.status != ReadingStatus.READ -> book.copy(dateRead = null)
-        book.dateRead == null -> book.copy(dateRead = clock())
-        else -> book
+    /**
+     * Status rules: Reading records a start date; Read records a read date and keeps the start date and
+     * progress as history; To read / To buy mean "not started", so start date and progress are cleared.
+     */
+    private fun withStatusDates(book: Book): Book = when (book.status) {
+        ReadingStatus.READING -> book.copy(dateRead = null, dateStarted = book.dateStarted ?: clock())
+        ReadingStatus.READ -> book.copy(dateRead = book.dateRead ?: clock())
+        ReadingStatus.TO_READ, ReadingStatus.WISHLIST ->
+            book.copy(dateRead = null, dateStarted = null, currentPage = null, progressPercent = null)
     }
 
     internal sealed interface Validation {
@@ -140,6 +162,13 @@ class BookRepository(
         val isbn = book.isbn?.takeIf { it.isNotBlank() }?.let {
             Isbn.normalize(it) ?: return Validation.Invalid(SaveResult.InvalidIsbn)
         }
-        return Validation.Ok(book.copy(title = title, isbn = isbn))
+        return Validation.Ok(
+            book.copy(
+                title = title,
+                isbn = isbn,
+                currentPage = book.currentPage?.takeIf { it >= 0 },
+                progressPercent = book.progressPercent?.coerceIn(0, 100),
+            )
+        )
     }
 }
