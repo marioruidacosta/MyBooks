@@ -12,8 +12,11 @@ struct MyBooksApp: App {
 }
 
 struct ComposeView: UIViewControllerRepresentable {
+    /// Kept for the app's lifetime: it holds the pending scanner/camera/picker callbacks.
+    private static let nativeServices = NativeServices()
+
     func makeUIViewController(context: Context) -> UIViewController {
-        MainViewControllerKt.MainViewController()
+        MainViewControllerKt.MainViewController(native: Self.nativeServices)
     }
 
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}

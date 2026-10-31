@@ -31,7 +31,7 @@ jobs:
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
 
       - name: Shared tests on the iOS simulator
-        run: ./gradlew :shared:iosSimulatorArm64Test
+        run: bash .github/scripts/annotate.sh ./gradlew :shared:iosSimulatorArm64Test --stacktrace
 
       - name: Tools (XcodeGen, SVG renderer)
         run: brew install xcodegen librsvg
@@ -49,11 +49,11 @@ jobs:
 
       - name: Generate Xcode project
         working-directory: iosApp
-        run: xcodegen generate
+        run: bash ../.github/scripts/annotate.sh xcodegen generate
 
       - name: Simulator build (unsigned)
         run: |
-          xcodebuild -project iosApp/MyBooks.xcodeproj -scheme MyBooks -configuration Debug \
+          bash .github/scripts/annotate.sh xcodebuild -project iosApp/MyBooks.xcodeproj -scheme MyBooks -configuration Debug \
             -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 
       - name: Archive and upload to TestFlight
@@ -63,7 +63,7 @@ jobs:
           key="$RUNNER_TEMP/AuthKey.p8"
           echo "$ASC_KEY_P8" | base64 --decode > "$key"
           auth=(-allowProvisioningUpdates -authenticationKeyPath "$key" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
-          xcodebuild -project iosApp/MyBooks.xcodeproj -scheme MyBooks -configuration Release \
+          bash .github/scripts/annotate.sh xcodebuild -project iosApp/MyBooks.xcodeproj -scheme MyBooks -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/MyBooks.xcarchive" \
             "${auth[@]}" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" archive
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
@@ -76,6 +76,6 @@ jobs:
             <key>signingStyle</key><string>automatic</string>
           </dict></plist>
           EOF
-          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/MyBooks.xcarchive" \
+          bash .github/scripts/annotate.sh xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/MyBooks.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" "${auth[@]}"
           rm -f "$key"

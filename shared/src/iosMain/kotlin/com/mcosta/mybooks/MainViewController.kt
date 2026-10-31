@@ -6,6 +6,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.mcosta.mybooks.data.covers.CoverStore
 import com.mcosta.mybooks.data.db.AppDatabase
 import com.mcosta.mybooks.data.db.createDatabase
+import com.mcosta.mybooks.platform.IosNativeServices
 import com.mcosta.mybooks.platform.iosPlatformServices
 import com.mcosta.mybooks.ui.App
 import io.ktor.client.engine.darwin.Darwin
@@ -42,7 +43,7 @@ private val container: AppContainer by lazy {
 
 /** Entry point used by the Swift app: the whole shared UI in a UIViewController. */
 @Suppress("FunctionName", "unused")
-fun MainViewController(): UIViewController {
-    val services = iosPlatformServices()
+fun MainViewController(native: IosNativeServices): UIViewController {
+    val services = iosPlatformServices(native)
     return ComposeUIViewController { App(container, services) }
 }
