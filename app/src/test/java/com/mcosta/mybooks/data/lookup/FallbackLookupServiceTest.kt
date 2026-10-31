@@ -43,7 +43,23 @@ class FallbackLookupServiceTest {
     }
 
     @Test
-    fun primaryErrorSecondaryMissIsError() = runTest {
-        assertTrue(FallbackLookupService(Fixed(error), Fixed(LookupResult.NotFound)).lookup("x") is LookupResult.Error)
+    fun primaryErrorSecondaryMissIsNotFoundWithErrors() = runTest {
+        assertEquals(
+            LookupResult.NotFoundWithErrors(error.cause),
+            FallbackLookupService(Fixed(error), Fixed(LookupResult.NotFound)).lookup("x"),
+        )
+    }
+
+    @Test
+    fun primaryMissSecondaryErrorIsNotFoundWithErrors() = runTest {
+        assertEquals(
+            LookupResult.NotFoundWithErrors(error.cause),
+            FallbackLookupService(Fixed(LookupResult.NotFound), Fixed(error)).lookup("x"),
+        )
+    }
+
+    @Test
+    fun bothErrorIsError() = runTest {
+        assertTrue(FallbackLookupService(Fixed(error), Fixed(error)).lookup("x") is LookupResult.Error)
     }
 }

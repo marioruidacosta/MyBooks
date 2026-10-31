@@ -7,11 +7,10 @@ import com.mcosta.mybooks.data.db.AppDatabase
 import com.mcosta.mybooks.data.lookup.FallbackLookupService
 import com.mcosta.mybooks.data.lookup.GoogleBooksClient
 import com.mcosta.mybooks.data.lookup.OpenLibraryClient
+import com.mcosta.mybooks.data.lookup.lookupHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
 
 /** Hand-wired app dependencies, created once by [MyBooksApp]. */
 class AppContainer(context: Context) {
@@ -20,13 +19,14 @@ class AppContainer(context: Context) {
 
     private val db = AppDatabase.create(context)
 
-    private val http = OkHttpClient.Builder()
-        .callTimeout(15, TimeUnit.SECONDS)
-        .build()
+    private val http = lookupHttpClient("MyBooks/${BuildConfig.VERSION_NAME} (Android; personal library app)")
 
     val repository = BookRepository(
         dao = db.bookDao(),
-        lookupService = FallbackLookupService(GoogleBooksClient(http), OpenLibraryClient(http)),
+        lookupService = FallbackLookupService(
+            GoogleBooksClient(http, apiKey = BuildConfig.GOOGLE_BOOKS_API_KEY),
+            OpenLibraryClient(http),
+        ),
         transactionRunner = { block -> db.withTransaction { block() } },
     )
 }

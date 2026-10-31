@@ -40,6 +40,22 @@ class GoogleBooksClientTest {
     }
 
     @Test
+    fun apiKeyIsSentWhenConfigured() = runTest {
+        val keyed = GoogleBooksClient(OkHttpClient(), server.url("/").toString().trimEnd('/'), apiKey = "abc-123")
+        server.enqueue(json("google_found.json"))
+        keyed.lookup("9780441013593")
+        assertEquals("/books/v1/volumes?q=isbn:9780441013593&key=abc-123", server.takeRequest().path)
+    }
+
+    @Test
+    fun blankApiKeyIsNotSent() = runTest {
+        val unkeyed = GoogleBooksClient(OkHttpClient(), server.url("/").toString().trimEnd('/'), apiKey = " ")
+        server.enqueue(json("google_found.json"))
+        unkeyed.lookup("9780441013593")
+        assertEquals("/books/v1/volumes?q=isbn:9780441013593", server.takeRequest().path)
+    }
+
+    @Test
     fun googlePartialGivesNulls() = runTest {
         server.enqueue(json("google_partial.json"))
         val book = (client.lookup("9780306406157") as LookupResult.Found).book

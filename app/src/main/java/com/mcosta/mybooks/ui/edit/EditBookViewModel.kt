@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.mcosta.mybooks.data.BookRepository
 import com.mcosta.mybooks.data.SaveResult
 import com.mcosta.mybooks.data.lookup.LookupResult
+import com.mcosta.mybooks.data.lookup.failureReason
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,9 +69,15 @@ class EditBookViewModel(
                 when (result) {
                     is LookupResult.Found -> s.copy(loading = false, form = result.book.toForm().copy(isbn = isbn))
                     LookupResult.NotFound -> s.copy(loading = false, message = "Book not found — enter the details manually")
+                    is LookupResult.NotFoundWithErrors -> s.copy(
+                        loading = false,
+                        message = "Book not found, and one book database couldn't be checked " +
+                            "(${failureReason(result.cause)}) — enter the details manually",
+                    )
                     is LookupResult.Error -> s.copy(
                         loading = false,
-                        message = "Couldn't reach the book databases — enter the details manually",
+                        message = "Couldn't reach the book databases (${failureReason(result.cause)}) " +
+                            "— enter the details manually",
                     )
                 }
             }

@@ -10,10 +10,14 @@ class FallbackLookupService(
         val first = primary.lookup(isbn)
         if (first is LookupResult.Found) return first
         val second = secondary.lookup(isbn)
+        if (second is LookupResult.Found) return second
+        val firstError = (first as? LookupResult.Error)?.cause
+        val secondError = (second as? LookupResult.Error)?.cause
         return when {
-            second is LookupResult.Found -> second
-            first is LookupResult.Error -> first
-            else -> second
+            firstError != null && secondError != null -> LookupResult.Error(firstError)
+            firstError != null -> LookupResult.NotFoundWithErrors(firstError)
+            secondError != null -> LookupResult.NotFoundWithErrors(secondError)
+            else -> LookupResult.NotFound
         }
     }
 }

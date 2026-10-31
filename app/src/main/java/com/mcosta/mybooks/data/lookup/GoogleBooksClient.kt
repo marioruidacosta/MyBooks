@@ -7,10 +7,13 @@ import okhttp3.OkHttpClient
 class GoogleBooksClient(
     private val http: OkHttpClient,
     private val baseUrl: String = "https://www.googleapis.com",
+    /** Without a key, requests share Google's anonymous daily quota, which is usually exhausted (HTTP 429). */
+    private val apiKey: String? = null,
 ) : BookLookupService {
 
     override suspend fun lookup(isbn: String): LookupResult = lookupCatching {
-        val body = http.getOrNull("$baseUrl/books/v1/volumes?q=isbn:$isbn") ?: return LookupResult.NotFound
+        val keyParam = apiKey?.trim()?.takeIf { it.isNotEmpty() }?.let { "&key=$it" }.orEmpty()
+        val body = http.getOrNull("$baseUrl/books/v1/volumes?q=isbn:$isbn$keyParam") ?: return LookupResult.NotFound
         val info = lookupJson.decodeFromString<Volumes>(body).items.firstOrNull()?.volumeInfo
             ?: return LookupResult.NotFound
         val title = listOfNotNull(info.title, info.subtitle).joinToString(": ")

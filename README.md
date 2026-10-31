@@ -26,6 +26,26 @@ Point the build at the SDK in `local.properties` (not committed):
 sdk.dir=C\:\\Users\\<you>\\devtools\\android-sdk
 ```
 
+### Google Books API key (recommended)
+
+Without a key, Google Books requests share Google's anonymous daily quota, which is usually used up
+(HTTP 429). The app then falls back to Open Library, which knows far fewer books. A free key gives
+you your own quota (1,000 requests/day by default):
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) create a project (no billing needed).
+2. *APIs & Services → Library* → enable **Books API**.
+3. *APIs & Services → Credentials → Create credentials → API key*.
+4. Optional but sensible: edit the key and under *API restrictions* allow only **Books API**.
+   Leave *Application restrictions* at **None** — the app calls the API directly, so an
+   "Android apps" restriction makes every request fail with "API key rejected".
+5. Add it to `local.properties` and rebuild:
+
+   ```properties
+   GOOGLE_BOOKS_API_KEY=AIza...
+   ```
+
+The key is compiled into the APK, so don't share the APK publicly.
+
 Then:
 
 ```sh

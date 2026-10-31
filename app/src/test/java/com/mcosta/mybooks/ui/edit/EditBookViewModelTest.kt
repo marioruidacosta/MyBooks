@@ -16,7 +16,9 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
+import com.mcosta.mybooks.data.lookup.HttpStatusException
 import java.io.IOException
+import java.net.UnknownHostException
 
 class EditBookViewModelTest {
     @get:Rule val mainRule = MainDispatcherRule()
@@ -53,10 +55,25 @@ class EditBookViewModelTest {
     }
 
     @Test
-    fun lookupErrorShowsOfflineMessage() = runTest {
-        lookupResult = LookupResult.Error(IOException("offline"))
+    fun lookupErrorShowsReason() = runTest {
+        lookupResult = LookupResult.Error(UnknownHostException("www.googleapis.com"))
         val vm = EditBookViewModel(repo, bookId = null, isbn = "9780306406157")
-        assertEquals("Couldn't reach the book databases — enter the details manually", vm.state.value.message)
+        assertEquals(
+            "Couldn't reach the book databases (no internet connection) — enter the details manually",
+            vm.state.value.message,
+        )
+    }
+
+    @Test
+    fun notFoundWithErrorsSaysWhichPartFailed() = runTest {
+        lookupResult = LookupResult.NotFoundWithErrors(HttpStatusException(429))
+        val vm = EditBookViewModel(repo, bookId = null, isbn = "9780306406157")
+        assertEquals(
+            "Book not found, and one book database couldn't be checked (daily request limit reached) " +
+                "— enter the details manually",
+            vm.state.value.message,
+        )
+        assertEquals("9780306406157", vm.state.value.form.isbn)
     }
 
     @Test
