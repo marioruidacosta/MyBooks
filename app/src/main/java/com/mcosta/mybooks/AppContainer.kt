@@ -4,8 +4,9 @@ import android.content.Context
 import androidx.room.withTransaction
 import com.mcosta.mybooks.data.BookRepository
 import com.mcosta.mybooks.data.db.AppDatabase
-import com.mcosta.mybooks.data.lookup.FallbackLookupService
+import com.mcosta.mybooks.data.lookup.BnpClient
 import com.mcosta.mybooks.data.lookup.GoogleBooksClient
+import com.mcosta.mybooks.data.lookup.LookupChain
 import com.mcosta.mybooks.data.lookup.OpenLibraryClient
 import com.mcosta.mybooks.data.lookup.lookupHttpClient
 import kotlinx.coroutines.CoroutineScope
@@ -23,9 +24,12 @@ class AppContainer(context: Context) {
 
     val repository = BookRepository(
         dao = db.bookDao(),
-        lookupService = FallbackLookupService(
-            GoogleBooksClient(http, apiKey = BuildConfig.GOOGLE_BOOKS_API_KEY),
-            OpenLibraryClient(http),
+        lookupService = LookupChain(
+            listOf(
+                BnpClient(http),
+                GoogleBooksClient(http, apiKey = BuildConfig.GOOGLE_BOOKS_API_KEY),
+                OpenLibraryClient(http),
+            )
         ),
         transactionRunner = { block -> db.withTransaction { block() } },
     )
