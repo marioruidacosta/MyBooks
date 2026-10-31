@@ -97,7 +97,12 @@ fun BookDetailScreen(viewModel: BookDetailViewModel, onBack: () -> Unit, onEdit:
             Header(b)
             StatusSelector(b.status, viewModel::setStatus, Modifier.fillMaxWidth())
             if (b.status == ReadingStatus.READ && b.dateRead != null) {
-                Text("Read on ${formatDate(b.dateRead)}", style = MaterialTheme.typography.bodyMedium)
+                val text = b.dateStarted?.let { "Read from ${formatDate(it)} to ${formatDate(b.dateRead)}" }
+                    ?: "Read on ${formatDate(b.dateRead)}"
+                Text(text, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (b.status == ReadingStatus.READING) {
+                ReadingSection(b, viewModel)
             }
             Column {
                 Text("Your score", style = MaterialTheme.typography.labelLarge)
@@ -171,6 +176,6 @@ private fun Description(text: String) {
     }
 }
 
-private fun formatDate(epochMs: Long): String =
+internal fun formatDate(epochMs: Long): String =
     DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
         .format(Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()))

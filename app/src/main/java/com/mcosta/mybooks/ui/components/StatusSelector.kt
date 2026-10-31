@@ -9,7 +9,7 @@ import androidx.compose.ui.Modifier
 import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.ui.library.label
 
-/** Read / To read / Wishlist segmented buttons. */
+/** Reading / To read / Read / To buy segmented buttons. */
 @Composable
 fun StatusSelector(status: ReadingStatus, onChange: (ReadingStatus) -> Unit, modifier: Modifier = Modifier) {
     val options = ReadingStatus.entries

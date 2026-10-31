@@ -1,7 +1,8 @@
 # MyBooks
 
 A personal book library for Android. Scan a book's barcode to add it, give it a 1–5 star score,
-keep notes, and track every book as **Read**, **To read** (you own it) or **Wishlist** (to buy).
+keep notes, and track every book as **Reading** (with start date and progress), **To read** (you own it),
+**Read** or **To buy**.
 All data stays on the phone; you can export/import it as a JSON backup from Settings.
 
 ## Features
@@ -9,7 +10,9 @@ All data stays on the phone; you can export/import it as a JSON backup from Sett
 - **Scan barcode** (Add button → Scan barcode): reads the ISBN on the back cover and fills in title,
   author, cover, publisher, year and pages from Google Books, falling back to Open Library.
   Scanning a book you already have opens it. Not found / offline → enter the details by hand.
-- **Library** tabs: All / Read / To read / Wishlist, plus search by title or author.
+- **Library** tabs: All / Reading / To read / Read / To buy, plus search by title or author.
+- **Reading**: the start date is recorded when a book moves to Reading (tap *Change* to edit it);
+  update progress by page number or percentage. Reading books show a progress bar in the list.
 - **Book page**: change status, tap stars to rate (tap the same star again to clear), write notes
   (saved automatically). Marking a book Read records the date.
 - **Settings**: export the library to a file / import it back (merges by ISBN, never deletes).

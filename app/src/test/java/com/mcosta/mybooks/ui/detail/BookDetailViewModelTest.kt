@@ -116,6 +116,45 @@ class BookDetailViewModelTest {
     }
 
     @Test
+    fun updateProgressByPages() = runTest {
+        val id = (repo.save(Book(title = "Dune", pageCount = 200, status = ReadingStatus.READING)) as SaveResult.Saved).id
+        val (vm, _) = inStore(id)
+        vm.updateProgress(" 50 ", byPages = true)
+        assertEquals(50, vm.book.value?.currentPage)
+        assertEquals(25, vm.book.value?.progressPercent)
+        assertNull(vm.progressError.value)
+    }
+
+    @Test
+    fun updateProgressByPercent() = runTest {
+        val id = (repo.save(Book(title = "Dune", status = ReadingStatus.READING)) as SaveResult.Saved).id
+        val (vm, _) = inStore(id)
+        vm.updateProgress("45", byPages = false)
+        assertEquals(45, vm.book.value?.progressPercent)
+    }
+
+    @Test
+    fun invalidProgressShowsErrorAndChangesNothing() = runTest {
+        val id = (repo.save(Book(title = "Dune", status = ReadingStatus.READING)) as SaveResult.Saved).id
+        val (vm, _) = inStore(id)
+        vm.updateProgress("150", byPages = false)
+        assertEquals("Enter a percentage from 0 to 100", vm.progressError.value)
+        vm.updateProgress("abc", byPages = true)
+        assertEquals("Enter a page number", vm.progressError.value)
+        assertNull(vm.book.value?.progressPercent)
+        vm.updateProgress("10", byPages = true)
+        assertNull(vm.progressError.value)
+    }
+
+    @Test
+    fun setDateStarted() = runTest {
+        val id = (repo.save(Book(title = "Dune", status = ReadingStatus.READING)) as SaveResult.Saved).id
+        val (vm, _) = inStore(id)
+        vm.setDateStarted(123L)
+        assertEquals(123L, vm.book.value?.dateStarted)
+    }
+
+    @Test
     fun deleteRemovesBook() = runTest {
         val id = newBook()
         val (vm, _) = inStore(id)
