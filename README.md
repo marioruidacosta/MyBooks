@@ -20,8 +20,8 @@ All data stays on the phone; you can export/import it as a JSON backup from Sett
 - **Cover photo**: when no cover is found, tap the empty cover on the book page (or *Take photo* in
   the edit form) to photograph the book with the phone's camera app. Photos are shrunk to about
   1000 px and stored privately in the app.
-- **Settings**: export the library, including cover photos, to a  file / import it back
-  (older  backups still import; merges, never deletes).
+- **Settings**: export the library, including cover photos, to a `.zip` file / import it back
+  (older `.json` backups still import; merges, never deletes).
 
 Scanning uses Google's code scanner from Google Play services, so the phone needs Play services
 (almost all Android phones have them). No camera permission is requested.
