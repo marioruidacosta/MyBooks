@@ -6,7 +6,9 @@ import VisionKit
 
 /// iPhone implementations of the scanner, camera and file pickers used by the shared Kotlin UI.
 /// Each call reports (result, error) to its completion; both nil means the user cancelled.
-final class NativeServices: NSObject, IosNativeServices {
+/// UIKit and VisionKit run on the main thread; the shared UI always calls these from the main thread.
+@MainActor
+final class NativeServices: NSObject {
     private var scanCompletion: ((String?, String?) -> Void)?
     private var photoCompletion: ((Data?, String?) -> Void)?
     private var saveCompletion: ((String?, String?) -> Void)?
@@ -20,14 +22,13 @@ final class NativeServices: NSObject, IosNativeServices {
             completion(nil, "This iPhone can't scan barcodes")
             return
         }
-        AVCaptureDevice.requestAccess(for: .video) { granted in
-            DispatchQueue.main.async {
-                guard granted, DataScannerViewController.isAvailable else {
-                    completion(nil, "Allow camera access for MyBooks in Settings to scan barcodes")
-                    return
-                }
-                self.presentScanner(completion: completion)
+        Task {
+            let granted = await AVCaptureDevice.requestAccess(for: .video)
+            guard granted, DataScannerViewController.isAvailable else {
+                completion(nil, "Allow camera access for MyBooks in Settings to scan barcodes")
+                return
             }
+            presentScanner(completion: completion)
         }
     }
 
@@ -125,6 +126,9 @@ final class NativeServices: NSObject, IosNativeServices {
         return top
     }
 }
+
+// The Kotlin protocol is not main-actor annotated; calls are checked to arrive on the main thread.
+extension NativeServices: @preconcurrency IosNativeServices {}
 
 extension NativeServices: DataScannerViewControllerDelegate {
     func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
