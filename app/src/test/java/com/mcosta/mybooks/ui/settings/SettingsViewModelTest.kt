@@ -15,7 +15,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.OutputStream
+import java.util.zip.ZipInputStream
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -28,21 +31,27 @@ class SettingsViewModelTest {
     })
 
     private class FakeIo(var content: String = "", val failRead: Boolean = false) : IoPort {
-        val written = mutableMapOf<Uri, String>()
-        override suspend fun write(uri: Uri, text: String) { written[uri] = text }
-        override suspend fun read(uri: Uri): String = if (failRead) throw IOException("gone") else content
+        val written = mutableMapOf<Uri, ByteArray>()
+        override suspend fun write(uri: Uri, writer: suspend (OutputStream) -> Unit) {
+            written[uri] = ByteArrayOutputStream().also { writer(it) }.toByteArray()
+        }
+        override suspend fun read(uri: Uri): ByteArray = if (failRead) throw IOException("gone") else content.toByteArray()
+    }
+
+    private fun libraryJson(zip: ByteArray): String = ZipInputStream(zip.inputStream()).use { z ->
+        generateSequence { z.nextEntry }.first { it.name == "library.json" }.let { z.readBytes().decodeToString() }
     }
 
     private val uri = Uri.parse("content://test/backup.json")
 
     @Test
-    fun exportWritesJsonAndReportsCount() = runTest {
+    fun exportWritesZipAndReportsCount() = runTest {
         repo.save(Book(title = "Dune"))
         repo.save(Book(title = "Emma"))
         val io = FakeIo()
         val vm = SettingsViewModel(repo, io)
         vm.export(uri)
-        assertEquals(listOf("Dune", "Emma"), BackupSerializer.decode(io.written.getValue(uri)).map { it.title })
+        assertEquals(listOf("Dune", "Emma"), BackupSerializer.decode(libraryJson(io.written.getValue(uri))).map { it.title })
         assertEquals("Library exported (2 books)", vm.message.value)
     }
 
