@@ -57,6 +57,10 @@ fun failureReason(cause: Throwable): String = when (cause) {
     else -> "unexpected response"
 }
 
+/** Removes control characters (catalogues embed e.g. U+0098/U+009C around non-sorting articles) and extra spaces. */
+internal fun cleanText(text: String): String =
+    text.filterNot { Character.isISOControl(it) }.replace(Regex("\\s+"), " ").trim()
+
 internal fun httpsUrl(url: String?): String? = url?.replaceFirst(Regex("^http://"), "https://")
 
 /** First 4-digit run in [date] as a year, e.g. "June 1983" → 1983, "2005-03-01" → 2005. */

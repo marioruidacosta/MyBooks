@@ -16,14 +16,14 @@ class GoogleBooksClient(
         val body = http.getOrNull("$baseUrl/books/v1/volumes?q=isbn:$isbn$keyParam") ?: return LookupResult.NotFound
         val info = lookupJson.decodeFromString<Volumes>(body).items.firstOrNull()?.volumeInfo
             ?: return LookupResult.NotFound
-        val title = listOfNotNull(info.title, info.subtitle).joinToString(": ")
+        val title = listOfNotNull(info.title, info.subtitle).map(::cleanText).filter { it.isNotEmpty() }.joinToString(": ")
         if (title.isBlank()) return LookupResult.NotFound
         LookupResult.Found(
             Book(
                 isbn = isbn,
                 title = title,
-                authors = info.authors.joinToString(", "),
-                publisher = info.publisher,
+                authors = info.authors.map(::cleanText).filter { it.isNotEmpty() }.joinToString(", "),
+                publisher = info.publisher?.let(::cleanText)?.ifEmpty { null },
                 publishedYear = info.publishedDate?.take(4)?.toIntOrNull(),
                 pageCount = info.pageCount,
                 coverUrl = httpsUrl(info.imageLinks?.thumbnail ?: info.imageLinks?.smallThumbnail),

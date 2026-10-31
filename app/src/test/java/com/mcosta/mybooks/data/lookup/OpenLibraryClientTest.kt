@@ -6,6 +6,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -34,9 +35,31 @@ class OpenLibraryClientTest {
         assertEquals("Harcourt Brace Jovanovich", book.publisher)
         assertEquals(1983, book.publishedYear)
         assertEquals(502, book.pageCount)
-        assertEquals("https://covers.example/b/isbn/9780151446476-L.jpg", book.coverUrl)
         assertEquals("/isbn/9780151446476.json", server.takeRequest().path)
         assertEquals("/authors/OL123A.json", server.takeRequest().path)
+    }
+
+    /** Open Library serves a 1x1 blank GIF for books without a cover, so no covers → no URL. */
+    @Test
+    fun editionWithoutCoversHasNoCoverUrl() = runTest {
+        server.enqueue(json("openlibrary_edition.json"))
+        server.enqueue(json("openlibrary_author.json"))
+        assertNull((client.lookup("9780151446476") as LookupResult.Found).book.coverUrl)
+    }
+
+    @Test
+    fun editionWithCoversUsesFirstCoverId() = runTest {
+        server.enqueue(json("openlibrary_edition_with_cover.json"))
+        server.enqueue(json("openlibrary_author.json"))
+        val book = (client.lookup("9789726084884") as LookupResult.Found).book
+        assertEquals("https://covers.example/b/id/14565843-L.jpg", book.coverUrl)
+    }
+
+    @Test
+    fun controlCharactersStrippedFromTitle() = runTest {
+        server.enqueue(json("openlibrary_edition_with_cover.json"))
+        server.enqueue(json("openlibrary_author.json"))
+        assertEquals("A violência e o escárnio", (client.lookup("9789726084884") as LookupResult.Found).book.title)
     }
 
     @Test

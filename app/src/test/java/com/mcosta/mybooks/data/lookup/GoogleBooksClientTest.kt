@@ -68,6 +68,19 @@ class GoogleBooksClientTest {
     }
 
     @Test
+    fun controlCharactersStripped() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"items":[{"volumeInfo":{"title":"\u0098O \u009cMemorial","authors":["José\u0009 Saramago"],"publisher":"Caminho\u0000"}}]}"""
+            )
+        )
+        val book = (client.lookup("9789722100000") as LookupResult.Found).book
+        assertEquals("O Memorial", book.title)
+        assertEquals("José Saramago", book.authors)
+        assertEquals("Caminho", book.publisher)
+    }
+
+    @Test
     fun googleZeroItemsIsNotFound() = runTest {
         server.enqueue(json("google_empty.json"))
         assertEquals(LookupResult.NotFound, client.lookup("9780306406157"))
