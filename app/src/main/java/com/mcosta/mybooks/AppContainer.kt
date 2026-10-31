@@ -12,6 +12,7 @@ import com.mcosta.mybooks.data.lookup.lookupHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import com.mcosta.mybooks.ui.components.coverStoreFor
 
 /** Hand-wired app dependencies, created once by [MyBooksApp]. */
 class AppContainer(context: Context) {
@@ -32,5 +33,6 @@ class AppContainer(context: Context) {
             )
         ),
         transactionRunner = { block -> db.withTransaction { block() } },
+        coverStore = coverStoreFor(context),
     )
 }

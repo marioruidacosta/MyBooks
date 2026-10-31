@@ -147,6 +147,14 @@ class BookDetailViewModelTest {
     }
 
     @Test
+    fun setCoverFromPhoto() = runTest {
+        val id = newBook()
+        val (vm, _) = inStore(id)
+        vm.setCover("cover:abc.jpg")
+        assertEquals("cover:abc.jpg", vm.book.value?.coverUrl)
+    }
+
+    @Test
     fun setDateStarted() = runTest {
         val id = (repo.save(Book(title = "Dune", status = ReadingStatus.READING)) as SaveResult.Saved).id
         val (vm, _) = inStore(id)

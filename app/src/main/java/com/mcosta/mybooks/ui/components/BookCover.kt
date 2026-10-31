@@ -14,10 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 
-/** Book cover image, with a book icon while loading or when there is no cover. */
+/** Book cover image (web URL or a `cover:` photo), with a book icon while loading or when there is no cover. */
 @Composable
 fun BookCover(url: String?, modifier: Modifier = Modifier) {
     val placeholder = @Composable {
@@ -38,7 +39,7 @@ fun BookCover(url: String?, modifier: Modifier = Modifier) {
             placeholder()
         } else {
             SubcomposeAsyncImage(
-                model = url,
+                model = coverStoreFor(LocalContext.current).imageModel(url),
                 contentDescription = "Cover",
                 contentScale = ContentScale.Crop,
                 loading = { placeholder() },

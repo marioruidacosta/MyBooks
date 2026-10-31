@@ -39,6 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import com.mcosta.mybooks.ui.components.rememberCoverPhotoTaker
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -61,6 +64,11 @@ fun BookDetailScreen(viewModel: BookDetailViewModel, onBack: () -> Unit, onEdit:
     var confirmDelete by remember { mutableStateOf(false) }
 
     LaunchedEffect(deleted) { if (deleted) onBack() }
+    val context = LocalContext.current
+    val takePhoto = rememberCoverPhotoTaker(
+        onPhoto = viewModel::setCover,
+        onError = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() },
+    )
     // Save the notes draft if the app goes to the background.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.saveNotes() }
 
@@ -94,7 +102,7 @@ fun BookDetailScreen(viewModel: BookDetailViewModel, onBack: () -> Unit, onEdit:
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Header(b)
+            Header(b, onAddPhoto = takePhoto)
             StatusSelector(b.status, viewModel::setStatus, Modifier.fillMaxWidth())
             if (b.status == ReadingStatus.READ && b.dateRead != null) {
                 val text = b.dateStarted?.let { "Read from ${formatDate(it)} to ${formatDate(b.dateRead)}" }
@@ -140,9 +148,17 @@ fun BookDetailScreen(viewModel: BookDetailViewModel, onBack: () -> Unit, onEdit:
 }
 
 @Composable
-private fun Header(b: Book) {
+private fun Header(b: Book, onAddPhoto: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        BookCover(b.coverUrl, Modifier.width(110.dp).height(165.dp))
+        if (b.coverUrl.isNullOrBlank()) {
+            // No cover found: tap the placeholder to photograph the book.
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                BookCover(null, Modifier.width(110.dp).height(165.dp).clickable(onClickLabel = "Take cover photo", onClick = onAddPhoto))
+                Text("Tap to add a photo", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
+        } else {
+            BookCover(b.coverUrl, Modifier.width(110.dp).height(165.dp))
+        }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(b.title, style = MaterialTheme.typography.headlineSmall)
             if (b.authors.isNotBlank()) Text(b.authors, style = MaterialTheme.typography.titleMedium)

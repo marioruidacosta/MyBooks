@@ -68,6 +68,10 @@ class BookDetailViewModel(
         }
     }
 
+    fun setCover(coverRef: String) {
+        viewModelScope.launch { repo.setCover(id, coverRef) }
+    }
+
     fun setDateStarted(date: Long) {
         viewModelScope.launch { repo.setDateStarted(id, date) }
     }

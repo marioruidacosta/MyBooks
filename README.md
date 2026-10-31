@@ -8,14 +8,20 @@ All data stays on the phone; you can export/import it as a JSON backup from Sett
 ## Features
 
 - **Scan barcode** (Add button → Scan barcode): reads the ISBN on the back cover and fills in title,
-  author, cover, publisher, year and pages from Google Books, falling back to Open Library.
+  author, cover, publisher, year and pages. Sources, in order: **BNP / PORBASE** (Biblioteca Nacional
+  de Portugal), **Google Books**, **Open Library**. If the first source to find the book has no cover,
+  the others are asked for one.
   Scanning a book you already have opens it. Not found / offline → enter the details by hand.
 - **Library** tabs: All / Reading / To read / Read / To buy, plus search by title or author.
 - **Reading**: the start date is recorded when a book moves to Reading (tap *Change* to edit it);
   update progress by page number or percentage. Reading books show a progress bar in the list.
 - **Book page**: change status, tap stars to rate (tap the same star again to clear), write notes
   (saved automatically). Marking a book Read records the date.
-- **Settings**: export the library to a file / import it back (merges by ISBN, never deletes).
+- **Cover photo**: when no cover is found, tap the empty cover on the book page (or *Take photo* in
+  the edit form) to photograph the book with the phone's camera app. Photos are shrunk to about
+  1000 px and stored privately in the app.
+- **Settings**: export the library, including cover photos, to a  file / import it back
+  (older  backups still import; merges, never deletes).
 
 Scanning uses Google's code scanner from Google Play services, so the phone needs Play services
 (almost all Android phones have them). No camera permission is requested.
