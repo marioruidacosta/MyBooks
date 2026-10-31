@@ -1,0 +1,5 @@
+Secrets.xcconfig
+MyBooks.xcodeproj/
+MyBooks/Info.plist
+MyBooks/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+build/

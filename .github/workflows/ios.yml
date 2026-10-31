@@ -1,0 +1,81 @@
+name: iOS
+
+# Always: shared tests on the iOS simulator + an unsigned simulator build.
+# When the App Store Connect secrets exist (see docs/ios-setup.md): archive, sign and upload to TestFlight.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "feature/ios-*"]
+    tags: ["v*"]
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      GOOGLE_BOOKS_API_KEY: ${{ secrets.GOOGLE_BOOKS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+
+      - name: Shared tests on the iOS simulator
+        run: ./gradlew :shared:iosSimulatorArm64Test
+
+      - name: Tools (XcodeGen, SVG renderer)
+        run: brew install xcodegen librsvg
+
+      - name: App icon (1024 px, no alpha channel)
+        run: |
+          set -euo pipefail
+          icon=iosApp/MyBooks/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+          rsvg-convert -w 1024 -h 1024 iosApp/icon.svg -o "$RUNNER_TEMP/icon.png"
+          sips -s format jpeg "$RUNNER_TEMP/icon.png" --out "$RUNNER_TEMP/icon.jpg"
+          sips -s format png "$RUNNER_TEMP/icon.jpg" --out "$icon"
+
+      - name: Secrets.xcconfig
+        run: printf 'GOOGLE_BOOKS_API_KEY = %s\nAPPLE_TEAM_ID = %s\n' "$GOOGLE_BOOKS_API_KEY" "$APPLE_TEAM_ID" > iosApp/Secrets.xcconfig
+
+      - name: Generate Xcode project
+        working-directory: iosApp
+        run: xcodegen generate
+
+      - name: Simulator build (unsigned)
+        run: |
+          xcodebuild -project iosApp/MyBooks.xcodeproj -scheme MyBooks -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+      - name: Archive and upload to TestFlight
+        if: env.ASC_KEY_ID != '' && github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/AuthKey.p8"
+          echo "$ASC_KEY_P8" | base64 --decode > "$key"
+          auth=(-allowProvisioningUpdates -authenticationKeyPath "$key" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          xcodebuild -project iosApp/MyBooks.xcodeproj -scheme MyBooks -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/MyBooks.xcarchive" \
+            "${auth[@]}" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" archive
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/MyBooks.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" "${auth[@]}"
+          rm -f "$key"
