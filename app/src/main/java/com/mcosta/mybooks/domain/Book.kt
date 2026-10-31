@@ -2,8 +2,12 @@ package com.mcosta.mybooks.domain
 
 import kotlinx.serialization.Serializable
 
+/**
+ * Stored by name, so declaration order is free (it's the order buttons show). WISHLIST is shown as
+ * "To buy"; the name is kept so existing databases and backup files stay valid.
+ */
 @Serializable
-enum class ReadingStatus { READ, TO_READ, WISHLIST }
+enum class ReadingStatus { READING, TO_READ, READ, WISHLIST }
 
 data class Book(
     val id: Long = 0,
@@ -20,4 +24,10 @@ data class Book(
     val notes: String = "",
     val dateAdded: Long = 0,
     val dateRead: Long? = null,
+    /** When reading started; set on first move to READING, kept when the book is finished. */
+    val dateStarted: Long? = null,
+    /** Reading progress as a page number, when entered by page. */
+    val currentPage: Int? = null,
+    /** Reading progress 0..100; computed from [currentPage] when the page count is known. */
+    val progressPercent: Int? = null,
 )

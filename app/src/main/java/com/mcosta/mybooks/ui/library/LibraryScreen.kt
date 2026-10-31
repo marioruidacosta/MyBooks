@@ -52,13 +52,14 @@ import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.ui.components.BookCover
 import com.mcosta.mybooks.ui.components.RatingStars
 
-private val tabs = listOf(null, ReadingStatus.READ, ReadingStatus.TO_READ, ReadingStatus.WISHLIST)
+private val tabs = listOf(null) + ReadingStatus.entries
 
 fun ReadingStatus?.label() = when (this) {
     null -> "All"
-    ReadingStatus.READ -> "Read"
+    ReadingStatus.READING -> "Reading"
     ReadingStatus.TO_READ -> "To read"
-    ReadingStatus.WISHLIST -> "Wishlist"
+    ReadingStatus.READ -> "Read"
+    ReadingStatus.WISHLIST -> "To buy"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

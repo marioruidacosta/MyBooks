@@ -80,3 +80,7 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.okhttp.mockwebserver)
 }
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
