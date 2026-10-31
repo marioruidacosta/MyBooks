@@ -15,14 +15,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import com.mcosta.mybooks.data.covers.CoverStore
-import com.mcosta.mybooks.data.covers.PhotoShrinker
+import com.mcosta.mybooks.data.covers.AndroidPhotoShrinker
+import okio.FileSystem
+import okio.Path.Companion.toOkioPath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
 /** The app's cover photo store (files/covers). */
-fun coverStoreFor(context: Context) = CoverStore(File(context.filesDir, "covers"))
+fun coverStoreFor(context: Context) = CoverStore(FileSystem.SYSTEM, context.filesDir.toOkioPath() / "covers")
 
 /**
  * Returns a function that opens the phone's camera app to photograph a cover. On success the photo is
@@ -47,7 +49,7 @@ fun rememberCoverPhotoTaker(onPhoto: (String) -> Unit, onError: (String) -> Unit
         }
         scope.launch {
             try {
-                val ref = withContext(Dispatchers.IO) { coverStoreFor(context).save(PhotoShrinker.shrink(file)) }
+                val ref = withContext(Dispatchers.IO) { coverStoreFor(context).save(AndroidPhotoShrinker.shrink(file.readBytes())) }
                 currentOnPhoto(ref)
             } catch (e: Exception) {
                 currentOnError("Couldn't use the photo: ${e.message ?: "unknown error"}")

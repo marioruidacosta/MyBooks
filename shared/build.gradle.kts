@@ -62,11 +62,13 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.ktor.client.core)
             implementation(libs.xmlutil.core)
+            implementation(libs.okio)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.ktor.client.mock)
+            implementation(libs.okio.fakefilesystem)
         }
         commonTest {
             kotlin.srcDir(generateTestFixtures)

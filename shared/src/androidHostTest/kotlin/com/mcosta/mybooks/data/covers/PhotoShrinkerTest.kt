@@ -33,24 +33,24 @@ class PhotoShrinkerTest {
 
     @Test
     fun largePhotoIsShrunkToMaxSideKeepingAspect() {
-        val (w, h) = size(PhotoShrinker.shrink(photo(3000, 2000), maxSide = 1000))
+        val (w, h) = size(AndroidPhotoShrinker.shrink(photo(3000, 2000).readBytes(), maxSide = 1000))
         assertEquals(1000, w)
         assertEquals(667, h)
     }
 
     @Test
     fun smallPhotoKeepsItsSize() {
-        val (w, h) = size(PhotoShrinker.shrink(photo(400, 600), maxSide = 1000))
+        val (w, h) = size(AndroidPhotoShrinker.shrink(photo(400, 600).readBytes(), maxSide = 1000))
         assertEquals(400, w)
         assertEquals(600, h)
     }
 
     @Test
     fun sampleSizeIsLargestPowerOfTwoKeepingAtLeastMaxSide() {
-        assertEquals(4, PhotoShrinker.sampleSize(4000, 3000, 1000))
-        assertEquals(2, PhotoShrinker.sampleSize(3999, 3000, 1000))
-        assertEquals(1, PhotoShrinker.sampleSize(1500, 1000, 1000))
-        assertEquals(8, PhotoShrinker.sampleSize(8000, 6000, 1000))
-        assertTrue(PhotoShrinker.sampleSize(500, 500, 1000) == 1)
+        assertEquals(4, AndroidPhotoShrinker.sampleSize(4000, 3000, 1000))
+        assertEquals(2, AndroidPhotoShrinker.sampleSize(3999, 3000, 1000))
+        assertEquals(1, AndroidPhotoShrinker.sampleSize(1500, 1000, 1000))
+        assertEquals(8, AndroidPhotoShrinker.sampleSize(8000, 6000, 1000))
+        assertTrue(AndroidPhotoShrinker.sampleSize(500, 500, 1000) == 1)
     }
 }

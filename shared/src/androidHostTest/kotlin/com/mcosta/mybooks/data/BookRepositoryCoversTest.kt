@@ -10,22 +10,22 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayOutputStream
-import java.io.File
+import okio.Path.Companion.toPath
+import okio.fakefilesystem.FakeFileSystem
 import java.util.zip.ZipInputStream
 
 class BookRepositoryCoversTest {
-    @get:Rule val tmp = TemporaryFolder()
+    private val fs = FakeFileSystem()
 
     private val dao = FakeBookDao()
     private val lookup = object : BookLookupService {
         override suspend fun lookup(isbn: String): LookupResult = LookupResult.NotFound
     }
-    private val store by lazy { CoverStore(File(tmp.root, "covers")) }
+    private val store by lazy { CoverStore(fs, "/covers".toPath()) }
     private val repo by lazy { BookRepository(dao, lookup, clock = { 1000L }, coverStore = store) }
 
     private suspend fun saveOk(book: Book) = (repo.save(book) as SaveResult.Saved).id
@@ -37,8 +37,8 @@ class BookRepositoryCoversTest {
         val second = store.save(byteArrayOf(2))
         repo.setCover(id, second)
         assertEquals(second, dao.getById(id)!!.coverUrl)
-        assertFalse(store.fileFor(first)!!.exists())
-        assertTrue(store.fileFor(second)!!.exists())
+        assertNull(store.read(first))
+        assertTrue(store.read(second) != null)
     }
 
     @Test
@@ -46,7 +46,7 @@ class BookRepositoryCoversTest {
         val photo = store.save(byteArrayOf(1))
         val id = saveOk(Book(title = "Dune", coverUrl = photo))
         saveOk(dao.getById(id)!!.let { Book(id = id, title = "Dune", coverUrl = "https://x/y.jpg") })
-        assertFalse(store.fileFor(photo)!!.exists())
+        assertNull(store.read(photo))
     }
 
     @Test
@@ -54,7 +54,7 @@ class BookRepositoryCoversTest {
         val photo = store.save(byteArrayOf(1))
         val id = saveOk(Book(title = "Dune", coverUrl = photo))
         repo.delete(id)
-        assertFalse(store.fileFor(photo)!!.exists())
+        assertNull(store.read(photo))
     }
 
     @Test
@@ -80,7 +80,7 @@ class BookRepositoryCoversTest {
         saveOk(Book(title = "Dune", coverUrl = photo))
         val backup = repo.exportBackup()
 
-        val newStore = CoverStore(File(tmp.root, "new-phone"))
+        val newStore = CoverStore(fs, "/new-phone".toPath())
         val newDao = FakeBookDao()
         val newRepo = BookRepository(newDao, lookup, clock = { 1L }, coverStore = newStore)
         val summary = newRepo.importBackup(backup)
@@ -88,7 +88,7 @@ class BookRepositoryCoversTest {
         assertEquals(ImportSummary(added = 1, updated = 0, failed = 0), summary)
         val restored = newDao.getAll().single()
         assertEquals(photo, restored.coverUrl)
-        assertArrayEquals(byteArrayOf(4, 5, 6), newStore.fileFor(restored.coverUrl)!!.readBytes())
+        assertArrayEquals(byteArrayOf(4, 5, 6), newStore.read(restored.coverUrl))
     }
 
     @Test
@@ -115,6 +115,6 @@ class BookRepositoryCoversTest {
             zip.putNextEntry(java.util.zip.ZipEntry("covers/../../evil.jpg")); zip.write(byteArrayOf(1)); zip.closeEntry()
         }
         repo.importBackup(out.toByteArray())
-        assertFalse(File(tmp.root, "evil.jpg").exists())
+        assertFalse(fs.exists("/evil.jpg".toPath()))
     }
 }

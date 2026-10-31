@@ -1,25 +1,23 @@
 package com.mcosta.mybooks.data.covers
 
-import org.junit.Assert.assertArrayEquals
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Rule
-import org.junit.Test
-import org.junit.rules.TemporaryFolder
-import java.io.File
+import okio.Path.Companion.toPath
+import okio.fakefilesystem.FakeFileSystem
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class CoverStoreTest {
-    @get:Rule val tmp = TemporaryFolder()
-
-    private val store by lazy { CoverStore(File(tmp.root, "covers")) }
+    private val fs = FakeFileSystem()
+    private val store = CoverStore(fs, "/app/files/covers".toPath())
 
     @Test
     fun saveReturnsCoverRefAndStoresBytes() {
         val ref = store.save(byteArrayOf(1, 2, 3))
         assertTrue(ref.startsWith("cover:") && ref.endsWith(".jpg"))
-        assertArrayEquals(byteArrayOf(1, 2, 3), store.fileFor(ref)!!.readBytes())
+        assertContentEquals(byteArrayOf(1, 2, 3), store.read(ref))
     }
 
     @Test
@@ -30,16 +28,16 @@ class CoverStoreTest {
     }
 
     @Test
-    fun imageModelForLocalCoverIsTheFile() {
-        val ref = store.save(byteArrayOf(9))
-        assertEquals(store.fileFor(ref), store.imageModel(ref))
+    fun imageModelForLocalCoverIsAFileUrl() {
+        val ref = store.put("abc.jpg", byteArrayOf(9))
+        assertEquals("file:///app/files/covers/abc.jpg", store.imageModel(ref))
     }
 
     @Test
     fun deleteRemovesLocalFileOnly() {
         val ref = store.save(byteArrayOf(9))
         store.delete(ref)
-        assertFalse(store.fileFor(ref)!!.exists())
+        assertNull(store.read(ref))
         store.delete("https://x/y.jpg") // no-op, no crash
         store.delete(null)
     }
@@ -55,6 +53,7 @@ class CoverStoreTest {
     fun putUsesGivenName() {
         val ref = store.put("abc.jpg", byteArrayOf(7))
         assertEquals("cover:abc.jpg", ref)
-        assertArrayEquals(byteArrayOf(7), store.fileFor(ref)!!.readBytes())
+        assertContentEquals(byteArrayOf(7), store.read(ref))
+        assertEquals("abc.jpg", store.nameOf(ref))
     }
 }

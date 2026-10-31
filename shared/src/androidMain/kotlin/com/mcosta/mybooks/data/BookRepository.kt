@@ -114,8 +114,9 @@ class BookRepository(
     suspend fun exportBackup(): ByteArray {
         val books = dao.getAll().map { it.toBook() }
         val photos = books.mapNotNull { it.coverUrl }.distinct().mapNotNull { ref ->
-            val file = coverStore?.fileFor(ref)?.takeIf { it.isFile } ?: return@mapNotNull null
-            (BACKUP_COVERS + file.name) to file.readBytes()
+            val name = coverStore?.nameOf(ref) ?: return@mapNotNull null
+            val bytes = coverStore.read(ref) ?: return@mapNotNull null
+            (BACKUP_COVERS + name) to bytes
         }
         return Zip.write(listOf(BACKUP_LIBRARY to BackupSerializer.encode(books, clock()).encodeToByteArray()) + photos)
     }
