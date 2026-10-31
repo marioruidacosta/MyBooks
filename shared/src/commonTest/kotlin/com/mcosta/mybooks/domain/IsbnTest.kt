@@ -1,8 +1,8 @@
 package com.mcosta.mybooks.domain
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.Test
 
 class IsbnTest {
     @Test fun isbn13Valid() = assertEquals("9780306406157", Isbn.normalize("9780306406157"))
