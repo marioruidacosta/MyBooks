@@ -2,6 +2,7 @@ package com.mcosta.mybooks.data
 
 import com.mcosta.mybooks.data.backup.BackupFormatException
 import com.mcosta.mybooks.data.backup.BackupSerializer
+import com.mcosta.mybooks.data.covers.CoverStore
 import com.mcosta.mybooks.data.db.BookDao
 import com.mcosta.mybooks.data.db.searchPattern
 import com.mcosta.mybooks.data.db.toBook
@@ -13,6 +14,10 @@ import com.mcosta.mybooks.domain.Isbn
 import com.mcosta.mybooks.domain.ReadingStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.io.OutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 sealed interface SaveResult {
     data class Saved(val id: Long) : SaveResult
@@ -31,6 +36,8 @@ class BookRepository(
     private val clock: () -> Long = System::currentTimeMillis,
     /** Runs a block atomically; the app passes Room's `withTransaction`. */
     private val transactionRunner: suspend (suspend () -> Unit) -> Unit = { it() },
+    /** Cover photos taken in the app; null in tests that don't involve them. */
+    private val coverStore: CoverStore? = null,
 ) {
     fun observeBooks(status: ReadingStatus?, query: String): Flow<List<Book>> =
         dao.observe(status, searchPattern(query)).map { list -> list.map { it.toBook() } }
@@ -61,6 +68,7 @@ class BookRepository(
             val stored = dao.getById(validated.id)
             val merged = validated.copy(dateAdded = stored?.dateAdded ?: validated.dateAdded)
             dao.update(withStatusDates(merged).toEntity())
+            if (stored != null && stored.coverUrl != merged.coverUrl) coverStore?.delete(stored.coverUrl)
             SaveResult.Saved(validated.id)
         }
     }
@@ -92,7 +100,59 @@ class BookRepository(
 
     suspend fun setDateStarted(id: Long, date: Long) = modify(id) { it.copy(dateStarted = date) }
 
-    suspend fun delete(id: Long) = dao.delete(id)
+    /** Sets the cover (e.g. a new photo) and removes the previous cover photo, if any. */
+    suspend fun setCover(id: Long, coverUrl: String?) {
+        val old = dao.getById(id)?.coverUrl
+        modify(id) { it.copy(coverUrl = coverUrl) }
+        if (old != coverUrl) coverStore?.delete(old)
+    }
+
+    suspend fun delete(id: Long) {
+        val cover = dao.getById(id)?.coverUrl
+        dao.delete(id)
+        coverStore?.delete(cover)
+    }
+
+    /** Writes a .zip backup: library.json plus the cover photos taken in the app (covers/<name>). */
+    suspend fun exportBackup(out: OutputStream) {
+        val books = dao.getAll().map { it.toBook() }
+        ZipOutputStream(out).use { zip ->
+            zip.putNextEntry(ZipEntry(BACKUP_LIBRARY))
+            zip.write(BackupSerializer.encode(books, clock()).toByteArray())
+            zip.closeEntry()
+            for (ref in books.mapNotNull { it.coverUrl }.distinct()) {
+                val file = coverStore?.fileFor(ref)?.takeIf { it.isFile } ?: continue
+                zip.putNextEntry(ZipEntry(BACKUP_COVERS + file.name))
+                file.inputStream().use { it.copyTo(zip) }
+                zip.closeEntry()
+            }
+        }
+    }
+
+    /** Restores a .zip backup (with cover photos) or an older plain .json backup. */
+    suspend fun importBackup(bytes: ByteArray): ImportSummary {
+        if (!isZip(bytes)) return importJson(bytes.decodeToString())
+        var json: String? = null
+        val photos = mutableMapOf<String, ByteArray>()
+        ZipInputStream(bytes.inputStream()).use { zip ->
+            generateSequence { zip.nextEntry }.forEach { entry ->
+                when {
+                    entry.name == BACKUP_LIBRARY -> json = zip.readBytes().decodeToString()
+                    entry.name.startsWith(BACKUP_COVERS) -> {
+                        val name = entry.name.removePrefix(BACKUP_COVERS)
+                        if (CoverStore.isSafeName(name)) photos[name] = zip.readBytes()
+                    }
+                }
+            }
+        }
+        val library = json ?: throw BackupFormatException("Not a MyBooks backup file")
+        BackupSerializer.decode(library) // validate before writing any photo
+        photos.forEach { (name, data) -> coverStore?.put(name, data) }
+        return importJson(library)
+    }
+
+    private fun isZip(bytes: ByteArray) =
+        bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte() && bytes[2] == 3.toByte() && bytes[3] == 4.toByte()
 
     suspend fun exportJson(): String = BackupSerializer.encode(dao.getAll().map { it.toBook() }, clock())
 
@@ -147,6 +207,11 @@ class BookRepository(
         ReadingStatus.READ -> book.copy(dateRead = book.dateRead ?: clock())
         ReadingStatus.TO_READ, ReadingStatus.WISHLIST ->
             book.copy(dateRead = null, dateStarted = null, currentPage = null, progressPercent = null)
+    }
+
+    private companion object {
+        const val BACKUP_LIBRARY = "library.json"
+        const val BACKUP_COVERS = "covers/"
     }
 
     internal sealed interface Validation {
