@@ -1,10 +1,6 @@
 package com.mcosta.mybooks.data.lookup
 
 import kotlinx.coroutines.test.runTest
-import okhttp3.OkHttpClient
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -12,19 +8,16 @@ import org.junit.Before
 import org.junit.Test
 
 class BnpClientTest {
-    private val server = MockWebServer()
+    private val server = FakeHttpServer()
     private lateinit var client: BnpClient
 
     @Before
     fun setUp() {
-        server.start()
-        client = BnpClient(OkHttpClient(), baseUrl = server.url("/").toString().trimEnd('/'))
+        client = BnpClient(server.httpClient(), baseUrl = server.baseUrl)
     }
 
-    @After
-    fun tearDown() = server.shutdown()
 
-    private fun xml(name: String) = MockResponse().setHeader("Content-Type", "text/xml;charset=utf-8").setBody(fixture(name))
+    private fun xml(name: String) = FakeResponse().setHeader("Content-Type", "text/xml;charset=utf-8").setBody(fixture(name))
 
     @Test
     fun foundMapsFields() = runTest {
@@ -68,13 +61,13 @@ class BnpClientTest {
 
     @Test
     fun serverErrorIsError() = runTest {
-        server.enqueue(MockResponse().setResponseCode(503))
+        server.enqueue(FakeResponse().setResponseCode(503))
         assertTrue(client.lookup("9789726084884") is LookupResult.Error)
     }
 
     @Test
     fun malformedXmlIsError() = runTest {
-        server.enqueue(MockResponse().setBody("<html><body>maintenance"))
+        server.enqueue(FakeResponse().setBody("<html><body>maintenance"))
         assertTrue(client.lookup("9789726084884") is LookupResult.Error)
     }
 

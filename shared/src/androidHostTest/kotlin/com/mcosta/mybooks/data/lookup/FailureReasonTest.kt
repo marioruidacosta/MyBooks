@@ -20,6 +20,9 @@ class FailureReasonTest {
 
     @Test fun timeout() = assertEquals("request timed out", failureReason(SocketTimeoutException()))
 
+    @Test fun ktorTimeout() =
+        assertEquals("request timed out", failureReason(io.ktor.client.plugins.HttpRequestTimeoutException("https://x", 15_000)))
+
     @Test fun otherIo() = assertEquals("network error", failureReason(IOException("reset")))
 
     @Test fun badResponse() = assertEquals("unexpected response", failureReason(SerializationException("x")))

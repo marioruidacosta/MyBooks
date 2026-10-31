@@ -12,6 +12,7 @@ import com.mcosta.mybooks.data.lookup.lookupHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import io.ktor.client.engine.okhttp.OkHttp
 import com.mcosta.mybooks.ui.components.coverStoreFor
 
 /** Hand-wired app dependencies, created once by the app's Application class. */
@@ -21,7 +22,7 @@ class AppContainer(context: Context, googleBooksApiKey: String, appVersion: Stri
 
     private val db = AppDatabase.create(context)
 
-    private val http = lookupHttpClient("MyBooks/$appVersion (Android; personal library app)")
+    private val http = lookupHttpClient(OkHttp.create(), "MyBooks/$appVersion (Android; personal library app)")
 
     val repository = BookRepository(
         dao = db.bookDao(),

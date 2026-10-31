@@ -1,7 +1,7 @@
 package com.mcosta.mybooks.data.lookup
 
 import com.mcosta.mybooks.domain.Book
-import okhttp3.OkHttpClient
+import io.ktor.client.HttpClient
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader
@@ -12,7 +12,7 @@ import javax.xml.parsers.DocumentBuilderFactory
  * A missing record is HTTP 200 with `<urn-response><error>Registo inexistente</error></urn-response>`.
  */
 class BnpClient(
-    private val http: OkHttpClient,
+    private val http: HttpClient,
     private val baseUrl: String = "https://urn.porbase.org",
 ) : BookLookupService {
 

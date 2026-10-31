@@ -3,10 +3,10 @@ package com.mcosta.mybooks.data.lookup
 import com.mcosta.mybooks.domain.Book
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
-import okhttp3.OkHttpClient
+import io.ktor.client.HttpClient
 
 class OpenLibraryClient(
-    private val http: OkHttpClient,
+    private val http: HttpClient,
     private val baseUrl: String = "https://openlibrary.org",
     private val coversBaseUrl: String = "https://covers.openlibrary.org",
 ) : BookLookupService {

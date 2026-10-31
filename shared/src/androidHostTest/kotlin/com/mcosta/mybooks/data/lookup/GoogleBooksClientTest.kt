@@ -1,10 +1,6 @@
 package com.mcosta.mybooks.data.lookup
 
 import kotlinx.coroutines.test.runTest
-import okhttp3.OkHttpClient
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -12,17 +8,14 @@ import org.junit.Before
 import org.junit.Test
 
 class GoogleBooksClientTest {
-    private val server = MockWebServer()
+    private val server = FakeHttpServer()
     private lateinit var client: GoogleBooksClient
 
     @Before
     fun setUp() {
-        server.start()
-        client = GoogleBooksClient(OkHttpClient(), server.url("/").toString().trimEnd('/'))
+        client = GoogleBooksClient(server.httpClient(), server.baseUrl)
     }
 
-    @After
-    fun tearDown() = server.shutdown()
 
     @Test
     fun googleFoundMapsAllFields() = runTest {
@@ -41,7 +34,7 @@ class GoogleBooksClientTest {
 
     @Test
     fun apiKeyIsSentWhenConfigured() = runTest {
-        val keyed = GoogleBooksClient(OkHttpClient(), server.url("/").toString().trimEnd('/'), apiKey = "abc-123")
+        val keyed = GoogleBooksClient(server.httpClient(), server.baseUrl, apiKey = "abc-123")
         server.enqueue(json("google_found.json"))
         keyed.lookup("9780441013593")
         assertEquals("/books/v1/volumes?q=isbn:9780441013593&key=abc-123", server.takeRequest().path)
@@ -49,7 +42,7 @@ class GoogleBooksClientTest {
 
     @Test
     fun blankApiKeyIsNotSent() = runTest {
-        val unkeyed = GoogleBooksClient(OkHttpClient(), server.url("/").toString().trimEnd('/'), apiKey = " ")
+        val unkeyed = GoogleBooksClient(server.httpClient(), server.baseUrl, apiKey = " ")
         server.enqueue(json("google_found.json"))
         unkeyed.lookup("9780441013593")
         assertEquals("/books/v1/volumes?q=isbn:9780441013593", server.takeRequest().path)
@@ -70,7 +63,7 @@ class GoogleBooksClientTest {
     @Test
     fun controlCharactersStripped() = runTest {
         server.enqueue(
-            MockResponse().setBody(
+            FakeResponse().setBody(
                 """{"items":[{"volumeInfo":{"title":"\u0098O \u009cMemorial","authors":["José\u0009 Saramago"],"publisher":"Caminho\u0000"}}]}"""
             )
         )
@@ -88,13 +81,13 @@ class GoogleBooksClientTest {
 
     @Test
     fun googleServerErrorIsError() = runTest {
-        server.enqueue(MockResponse().setResponseCode(500))
+        server.enqueue(FakeResponse().setResponseCode(500))
         assertTrue(client.lookup("9780306406157") is LookupResult.Error)
     }
 
     @Test
     fun malformedJsonIsError() = runTest {
-        server.enqueue(MockResponse().setBody("<html>oops</html>"))
+        server.enqueue(FakeResponse().setBody("<html>oops</html>"))
         assertTrue(client.lookup("9780306406157") is LookupResult.Error)
     }
 }

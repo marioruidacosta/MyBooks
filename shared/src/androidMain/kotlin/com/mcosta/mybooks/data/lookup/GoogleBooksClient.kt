@@ -2,10 +2,10 @@ package com.mcosta.mybooks.data.lookup
 
 import com.mcosta.mybooks.domain.Book
 import kotlinx.serialization.Serializable
-import okhttp3.OkHttpClient
+import io.ktor.client.HttpClient
 
 class GoogleBooksClient(
-    private val http: OkHttpClient,
+    private val http: HttpClient,
     private val baseUrl: String = "https://www.googleapis.com",
     /** Without a key, requests share Google's anonymous daily quota, which is usually exhausted (HTTP 429). */
     private val apiKey: String? = null,

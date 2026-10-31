@@ -1,36 +1,37 @@
 package com.mcosta.mybooks.data.lookup
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.UserAgent
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import java.util.concurrent.TimeUnit
 
 internal val lookupJson = Json { ignoreUnknownKeys = true }
 
 /** HTTP client for the book APIs; identifies the app with [userAgent] as Open Library requests. */
-fun lookupHttpClient(userAgent: String): OkHttpClient = OkHttpClient.Builder()
-    .callTimeout(15, TimeUnit.SECONDS)
-    .addInterceptor { chain ->
-        chain.proceed(chain.request().newBuilder().header("User-Agent", userAgent).build())
-    }
-    .build()
+fun lookupHttpClient(engine: HttpClientEngine, userAgent: String): HttpClient = HttpClient(engine) {
+    expectSuccess = false
+    install(HttpTimeout) { requestTimeoutMillis = 15_000 }
+    install(UserAgent) { agent = userAgent }
+}
 
 internal class HttpStatusException(val code: Int) : IOException("HTTP $code")
 
 /** GETs [url] and returns the body, or null on 404. Throws [IOException] on other failures. */
-internal suspend fun OkHttpClient.getOrNull(url: String): String? = withContext(Dispatchers.IO) {
-    newCall(Request.Builder().url(url).build()).execute().use { response ->
-        when {
-            response.code == 404 -> null
-            !response.isSuccessful -> throw HttpStatusException(response.code)
-            else -> response.body.string()
-        }
+internal suspend fun HttpClient.getOrNull(url: String): String? {
+    val response = get(url)
+    return when {
+        response.status.value == 404 -> null
+        !response.status.isSuccess() -> throw HttpStatusException(response.status.value)
+        else -> response.bodyAsText()
     }
 }
 
@@ -52,7 +53,7 @@ fun failureReason(cause: Throwable): String = when (cause) {
         else -> "server error (HTTP ${cause.code})"
     }
     is UnknownHostException -> "no internet connection"
-    is SocketTimeoutException, is InterruptedIOException -> "request timed out"
+    is HttpRequestTimeoutException, is SocketTimeoutException, is InterruptedIOException -> "request timed out"
     is IOException -> "network error"
     else -> "unexpected response"
 }

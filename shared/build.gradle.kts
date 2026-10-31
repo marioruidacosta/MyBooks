@@ -39,7 +39,8 @@ kotlin {
             implementation(libs.compose.material.icons)
             implementation(libs.room.runtime)
             implementation(libs.room.ktx)
-            implementation(libs.okhttp)
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.okhttp)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.coil.compose)
             implementation(libs.coil.network.okhttp)
@@ -51,7 +52,7 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.robolectric)
             implementation(libs.androidx.test.core)
-            implementation(libs.okhttp.mockwebserver)
+            implementation(libs.ktor.client.mock)
         }
     }
 }
