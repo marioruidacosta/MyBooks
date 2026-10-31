@@ -38,7 +38,8 @@ class SettingsViewModel(private val repo: BookRepository, private val io: IoPort
     val message: StateFlow<String?> = _message.asStateFlow()
 
     fun export(uri: Uri) = run("Export failed") {
-        io.write(uri) { repo.exportBackup(it) }
+        val backup = repo.exportBackup()
+        io.write(uri) { it.write(backup) }
         val count = repo.bookCount()
         "Library exported ($count ${if (count == 1) "book" else "books"})"
     }

@@ -62,11 +62,11 @@ class BookRepositoryCoversTest {
         val photo = store.save(byteArrayOf(4, 5, 6))
         saveOk(Book(title = "Dune", coverUrl = photo))
         saveOk(Book(title = "Emma", coverUrl = "https://x/emma.jpg"))
-        val out = ByteArrayOutputStream()
-        repo.exportBackup(out)
+        val backup: ByteArray = repo.exportBackup()
 
+        // Read with java.util.zip: the shared writer must produce standard ZIP files.
         val entries = mutableMapOf<String, ByteArray>()
-        ZipInputStream(out.toByteArray().inputStream()).use { zip ->
+        ZipInputStream(backup.inputStream()).use { zip ->
             generateSequence { zip.nextEntry }.forEach { entries[it.name] = zip.readBytes() }
         }
         assertEquals(setOf("library.json", "covers/${photo.removePrefix("cover:")}"), entries.keys)
@@ -78,13 +78,12 @@ class BookRepositoryCoversTest {
     fun restoringZipOnEmptyPhoneBringsBackPhotos() = runTest {
         val photo = store.save(byteArrayOf(4, 5, 6))
         saveOk(Book(title = "Dune", coverUrl = photo))
-        val out = ByteArrayOutputStream()
-        repo.exportBackup(out)
+        val backup = repo.exportBackup()
 
         val newStore = CoverStore(File(tmp.root, "new-phone"))
         val newDao = FakeBookDao()
         val newRepo = BookRepository(newDao, lookup, clock = { 1L }, coverStore = newStore)
-        val summary = newRepo.importBackup(out.toByteArray())
+        val summary = newRepo.importBackup(backup)
 
         assertEquals(ImportSummary(added = 1, updated = 0, failed = 0), summary)
         val restored = newDao.getAll().single()

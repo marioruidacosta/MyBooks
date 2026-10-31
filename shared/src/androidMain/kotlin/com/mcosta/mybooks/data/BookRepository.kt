@@ -2,6 +2,7 @@ package com.mcosta.mybooks.data
 
 import com.mcosta.mybooks.data.backup.BackupFormatException
 import com.mcosta.mybooks.data.backup.BackupSerializer
+import com.mcosta.mybooks.data.backup.Zip
 import com.mcosta.mybooks.data.covers.CoverStore
 import com.mcosta.mybooks.data.db.BookDao
 import com.mcosta.mybooks.data.db.searchPattern
@@ -14,10 +15,6 @@ import com.mcosta.mybooks.domain.Isbn
 import com.mcosta.mybooks.domain.ReadingStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import java.io.OutputStream
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 
 sealed interface SaveResult {
     data class Saved(val id: Long) : SaveResult
@@ -113,46 +110,29 @@ class BookRepository(
         coverStore?.delete(cover)
     }
 
-    /** Writes a .zip backup: library.json plus the cover photos taken in the app (covers/<name>). */
-    suspend fun exportBackup(out: OutputStream) {
+    /** A .zip backup: library.json plus the cover photos taken in the app (covers/<name>). */
+    suspend fun exportBackup(): ByteArray {
         val books = dao.getAll().map { it.toBook() }
-        ZipOutputStream(out).use { zip ->
-            zip.putNextEntry(ZipEntry(BACKUP_LIBRARY))
-            zip.write(BackupSerializer.encode(books, clock()).toByteArray())
-            zip.closeEntry()
-            for (ref in books.mapNotNull { it.coverUrl }.distinct()) {
-                val file = coverStore?.fileFor(ref)?.takeIf { it.isFile } ?: continue
-                zip.putNextEntry(ZipEntry(BACKUP_COVERS + file.name))
-                file.inputStream().use { it.copyTo(zip) }
-                zip.closeEntry()
-            }
+        val photos = books.mapNotNull { it.coverUrl }.distinct().mapNotNull { ref ->
+            val file = coverStore?.fileFor(ref)?.takeIf { it.isFile } ?: return@mapNotNull null
+            (BACKUP_COVERS + file.name) to file.readBytes()
         }
+        return Zip.write(listOf(BACKUP_LIBRARY to BackupSerializer.encode(books, clock()).encodeToByteArray()) + photos)
     }
 
     /** Restores a .zip backup (with cover photos) or an older plain .json backup. */
     suspend fun importBackup(bytes: ByteArray): ImportSummary {
-        if (!isZip(bytes)) return importJson(bytes.decodeToString())
-        var json: String? = null
-        val photos = mutableMapOf<String, ByteArray>()
-        ZipInputStream(bytes.inputStream()).use { zip ->
-            generateSequence { zip.nextEntry }.forEach { entry ->
-                when {
-                    entry.name == BACKUP_LIBRARY -> json = zip.readBytes().decodeToString()
-                    entry.name.startsWith(BACKUP_COVERS) -> {
-                        val name = entry.name.removePrefix(BACKUP_COVERS)
-                        if (CoverStore.isSafeName(name)) photos[name] = zip.readBytes()
-                    }
-                }
-            }
-        }
-        val library = json ?: throw BackupFormatException("Not a MyBooks backup file")
+        if (!Zip.isZip(bytes)) return importJson(bytes.decodeToString())
+        val entries = Zip.read(bytes)
+        val library = entries.firstOrNull { it.first == BACKUP_LIBRARY }?.second?.decodeToString()
+            ?: throw BackupFormatException("Not a MyBooks backup file")
         BackupSerializer.decode(library) // validate before writing any photo
-        photos.forEach { (name, data) -> coverStore?.put(name, data) }
+        for ((name, data) in entries) {
+            val photo = name.removePrefix(BACKUP_COVERS)
+            if (name.startsWith(BACKUP_COVERS) && CoverStore.isSafeName(photo)) coverStore?.put(photo, data)
+        }
         return importJson(library)
     }
-
-    private fun isZip(bytes: ByteArray) =
-        bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte() && bytes[2] == 3.toByte() && bytes[3] == 4.toByte()
 
     suspend fun exportJson(): String = BackupSerializer.encode(dao.getAll().map { it.toBook() }, clock())
 

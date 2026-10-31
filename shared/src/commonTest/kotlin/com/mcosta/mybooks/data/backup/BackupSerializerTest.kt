@@ -2,9 +2,10 @@ package com.mcosta.mybooks.data.backup
 
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class BackupSerializerTest {
     private val full = Book(
@@ -34,18 +35,18 @@ class BackupSerializerTest {
         assertEquals(listOf(Book(title = "Emma", status = ReadingStatus.WISHLIST)), BackupSerializer.decode(json))
     }
 
-    @Test(expected = BackupFormatException::class)
+    @Test
     fun version2Rejected() {
-        BackupSerializer.decode("""{"version":2,"exportedAt":0,"books":[]}""")
+        assertFailsWith<BackupFormatException> { BackupSerializer.decode("""{"version":2,"exportedAt":0,"books":[]}""") }
     }
 
-    @Test(expected = BackupFormatException::class)
+    @Test
     fun corruptJsonRejected() {
-        BackupSerializer.decode("not json at all")
+        assertFailsWith<BackupFormatException> { BackupSerializer.decode("not json at all") }
     }
 
-    @Test(expected = BackupFormatException::class)
+    @Test
     fun unknownStatusRejected() {
-        BackupSerializer.decode("""{"version":1,"exportedAt":0,"books":[{"title":"X","status":"LOST"}]}""")
+        assertFailsWith<BackupFormatException> { BackupSerializer.decode("""{"version":1,"exportedAt":0,"books":[{"title":"X","status":"LOST"}]}""") }
     }
 }
