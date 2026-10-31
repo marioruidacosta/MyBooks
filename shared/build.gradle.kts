@@ -63,6 +63,7 @@ kotlin {
             implementation(libs.ktor.client.core)
             implementation(libs.xmlutil.core)
             implementation(libs.okio)
+            implementation(libs.room.runtime)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
@@ -75,6 +76,7 @@ kotlin {
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
+            implementation(libs.sqlite.bundled)
         }
         androidMain.dependencies {
             implementation(libs.androidx.core.ktx)
@@ -87,8 +89,7 @@ kotlin {
             implementation(libs.compose.ui.tooling.preview)
             implementation(libs.compose.material3)
             implementation(libs.compose.material.icons)
-            implementation(libs.room.runtime)
-            implementation(libs.room.ktx)
+            implementation(libs.sqlite.framework)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.kotlinx.serialization.json)
@@ -109,6 +110,8 @@ kotlin {
 
 dependencies {
     add("kspAndroid", libs.room.compiler)
+    add("kspIosArm64", libs.room.compiler)
+    add("kspIosSimulatorArm64", libs.room.compiler)
 }
 
 room {

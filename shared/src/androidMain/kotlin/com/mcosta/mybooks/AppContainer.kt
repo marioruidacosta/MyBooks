@@ -1,9 +1,10 @@
 package com.mcosta.mybooks
 
 import android.content.Context
-import androidx.room.withTransaction
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.mcosta.mybooks.data.BookRepository
-import com.mcosta.mybooks.data.db.AppDatabase
+import com.mcosta.mybooks.data.db.createAndroidDatabase
 import com.mcosta.mybooks.data.lookup.BnpClient
 import com.mcosta.mybooks.data.lookup.GoogleBooksClient
 import com.mcosta.mybooks.data.lookup.LookupChain
@@ -20,7 +21,7 @@ class AppContainer(context: Context, googleBooksApiKey: String, appVersion: Stri
     /** Outlives screens; used for writes that must finish after a screen closes. */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private val db = AppDatabase.create(context)
+    private val db = createAndroidDatabase(context)
 
     private val http = lookupHttpClient(OkHttp.create(), "MyBooks/$appVersion (Android; personal library app)")
 
@@ -33,7 +34,7 @@ class AppContainer(context: Context, googleBooksApiKey: String, appVersion: Stri
                 OpenLibraryClient(http),
             )
         ),
-        transactionRunner = { block -> db.withTransaction { block() } },
+        transactionRunner = { block -> db.useWriterConnection { it.immediateTransaction { block() } } },
         coverStore = coverStoreFor(context),
     )
 }

@@ -55,7 +55,7 @@ class MigrationTest {
 
     @Test
     fun version1BooksSurviveUpgrade() = runTest {
-        val db = AppDatabase.create(context, name)
+        val db = createAndroidDatabase(context, name)
         val books = db.bookDao().getAll().map { it.toBook() }.associateBy { it.title }
         db.close()
 
@@ -75,7 +75,7 @@ class MigrationTest {
     /** Old cover-by-ISBN links return a blank 1x1 GIF when there's no cover; ask for a 404 instead. */
     @Test
     fun openLibraryIsbnCoverLinksAskForMissingCoverError() = runTest {
-        val db = AppDatabase.create(context, name)
+        val db = createAndroidDatabase(context, name)
         val cossery = db.bookDao().findByIsbn("9789726084884")!!
         db.close()
         assertEquals("https://covers.openlibrary.org/b/isbn/9789726084884-L.jpg?default=false", cossery.coverUrl)

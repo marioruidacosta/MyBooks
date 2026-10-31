@@ -1,6 +1,8 @@
 package com.mcosta.mybooks.data.db
 
-import android.database.sqlite.SQLiteConstraintException
+import androidx.sqlite.driver.AndroidSQLiteDriver
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.mcosta.mybooks.domain.Book
@@ -25,9 +27,7 @@ class BookDaoTest {
 
     @Before
     fun setUp() {
-        db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), AppDatabase::class.java)
-            .allowMainThreadQueries()
-            .build()
+        db = createDatabase(Room.inMemoryDatabaseBuilder<AppDatabase>(ApplicationProvider.getApplicationContext()), AndroidSQLiteDriver())
         dao = db.bookDao()
     }
 
@@ -106,10 +106,15 @@ class BookDaoTest {
         assertNull(dao.findWithoutIsbn("Dune", "Frank Herbert"))
     }
 
-    @Test(expected = SQLiteConstraintException::class)
+    @Test
     fun uniqueIsbnEnforced() = runTest {
         dao.insert(book("Dune", isbn = "9780441013593"))
-        dao.insert(book("Dune again", isbn = "9780441013593"))
+        try {
+            dao.insert(book("Dune again", isbn = "9780441013593"))
+            fail("expected a UNIQUE constraint failure")
+        } catch (e: Exception) {
+            assertTrue(e.message.orEmpty().contains("UNIQUE", ignoreCase = true))
+        }
     }
 
     @Test

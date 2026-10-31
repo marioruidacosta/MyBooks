@@ -31,7 +31,7 @@ class BookRepository(
     private val dao: BookDao,
     private val lookupService: BookLookupService,
     private val clock: () -> Long = System::currentTimeMillis,
-    /** Runs a block atomically; the app passes Room's `withTransaction`. */
+    /** Runs a block atomically; the app passes a Room write transaction. */
     private val transactionRunner: suspend (suspend () -> Unit) -> Unit = { it() },
     /** Cover photos taken in the app; null in tests that don't involve them. */
     private val coverStore: CoverStore? = null,
