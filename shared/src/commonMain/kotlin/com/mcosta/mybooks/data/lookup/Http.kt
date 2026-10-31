@@ -9,10 +9,7 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
-import java.io.IOException
-import java.io.InterruptedIOException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
+import kotlinx.io.IOException
 
 internal val lookupJson = Json { ignoreUnknownKeys = true }
 
@@ -52,15 +49,16 @@ fun failureReason(cause: Throwable): String = when (cause) {
         400, 401, 403 -> "API key rejected"
         else -> "server error (HTTP ${cause.code})"
     }
-    is UnknownHostException -> "no internet connection"
-    is HttpRequestTimeoutException, is SocketTimeoutException, is InterruptedIOException -> "request timed out"
-    is IOException -> "network error"
-    else -> "unexpected response"
+    is HttpRequestTimeoutException -> "request timed out"
+    else -> platformNetworkReason(cause) ?: if (cause is IOException) "network error" else "unexpected response"
 }
+
+/** Platform-specific network failures (offline, timeouts) as a user-facing reason, or null. */
+internal expect fun platformNetworkReason(cause: Throwable): String?
 
 /** Removes control characters (catalogues embed e.g. U+0098/U+009C around non-sorting articles) and extra spaces. */
 internal fun cleanText(text: String): String =
-    text.filterNot { Character.isISOControl(it) }.replace(Regex("\\s+"), " ").trim()
+    text.filterNot { it.isISOControl() }.replace(Regex("\\s+"), " ").trim()
 
 internal fun httpsUrl(url: String?): String? = url?.replaceFirst(Regex("^http://"), "https://")
 

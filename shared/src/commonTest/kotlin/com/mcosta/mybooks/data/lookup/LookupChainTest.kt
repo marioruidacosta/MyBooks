@@ -2,10 +2,10 @@ package com.mcosta.mybooks.data.lookup
 
 import com.mcosta.mybooks.domain.Book
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
-import java.io.IOException
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import kotlin.test.Test
+import kotlinx.io.IOException
 
 class LookupChainTest {
     private class Fixed(val result: LookupResult) : BookLookupService {

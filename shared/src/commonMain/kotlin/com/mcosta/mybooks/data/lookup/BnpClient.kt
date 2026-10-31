@@ -2,10 +2,9 @@ package com.mcosta.mybooks.data.lookup
 
 import com.mcosta.mybooks.domain.Book
 import io.ktor.client.HttpClient
-import org.w3c.dom.Element
-import org.xml.sax.InputSource
-import java.io.StringReader
-import javax.xml.parsers.DocumentBuilderFactory
+import nl.adaptivity.xmlutil.EventType
+import nl.adaptivity.xmlutil.XmlReader
+import nl.adaptivity.xmlutil.xmlStreaming
 
 /**
  * Biblioteca Nacional de Portugal (PORBASE) URN resolver, which returns Dublin Core XML for an ISBN.
@@ -18,12 +17,8 @@ class BnpClient(
 
     override suspend fun lookup(isbn: String): LookupResult = lookupCatching {
         val body = http.getOrNull("$baseUrl/isbn/dc/xml?id=$isbn") ?: return LookupResult.NotFound
-        val root = parseXml(body)
-        if (root.localName != "dc") return LookupResult.NotFound
-        fun values(name: String): List<String> {
-            val nodes = root.getElementsByTagNameNS(DC_NS, name)
-            return (0 until nodes.length).map { cleanText(nodes.item(it).textContent) }.filter { it.isNotEmpty() }
-        }
+        val record = parseDublinCore(body) ?: return LookupResult.NotFound
+        fun values(name: String): List<String> = record[name].orEmpty().map(::cleanText).filter { it.isNotEmpty() }
         val title = values("title").firstOrNull()?.let(::bnpTitle)?.takeIf { it.isNotBlank() }
             ?: return LookupResult.NotFound
         LookupResult.Found(
@@ -40,9 +35,29 @@ class BnpClient(
         )
     }
 
-    private fun parseXml(text: String): Element {
-        val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
-        return factory.newDocumentBuilder().parse(InputSource(StringReader(text))).documentElement
+    /** Dublin Core element texts by local name, or null when the root isn't `dc` (e.g. `urn-response` errors). */
+    private fun parseDublinCore(text: String): Map<String, List<String>>? {
+        // The generic (pure Kotlin) reader behaves the same on every platform.
+        val reader = xmlStreaming.newGenericReader(text)
+        val values = mutableMapOf<String, MutableList<String>>()
+        var root: String? = null
+        while (reader.hasNext()) {
+            if (reader.next() != EventType.START_ELEMENT) continue
+            if (root == null) root = reader.localName
+            if (reader.namespaceURI == DC_NS) values.getOrPut(reader.localName) { mutableListOf() }.add(reader.elementText())
+        }
+        return if (root == "dc") values else null
+    }
+
+    private fun XmlReader.elementText(): String {
+        val text = StringBuilder()
+        while (true) {
+            when (next()) {
+                EventType.TEXT, EventType.CDSECT, EventType.ENTITY_REF, EventType.IGNORABLE_WHITESPACE -> text.append(this.text)
+                EventType.END_ELEMENT -> return text.toString()
+                else -> Unit
+            }
+        }
     }
 
     private companion object {

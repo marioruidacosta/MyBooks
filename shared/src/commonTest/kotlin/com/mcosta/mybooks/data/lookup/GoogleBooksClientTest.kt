@@ -1,17 +1,17 @@
 package com.mcosta.mybooks.data.lookup
 
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 
 class GoogleBooksClientTest {
     private val server = FakeHttpServer()
     private lateinit var client: GoogleBooksClient
 
-    @Before
+    @BeforeTest
     fun setUp() {
         client = GoogleBooksClient(server.httpClient(), server.baseUrl)
     }

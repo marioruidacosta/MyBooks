@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
@@ -5,6 +7,35 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
+}
+
+// Test fixtures become Kotlin constants: common test code can't read resource files on iOS.
+val generateTestFixtures by tasks.registering {
+    val input = layout.projectDirectory.dir("src/commonTest/fixtures")
+    val output = layout.buildDirectory.dir("generated/fixtures/commonTest")
+    inputs.dir(input)
+    outputs.dir(output)
+    doLast {
+        val encoder = Base64.getEncoder()
+        val entries = input.asFile.listFiles()!!.filter { it.isFile }.sortedBy { it.name }
+            .joinToString("\n") { "    \"${it.name}\" to \"${encoder.encodeToString(it.readBytes())}\"," }
+        val dollar = "$"
+        val source = listOf(
+            "package com.mcosta.mybooks.testing",
+            "",
+            "import kotlin.io.encoding.Base64",
+            "",
+            "private val fixtures: Map<String, String> = mapOf(",
+            entries,
+            ")",
+            "",
+            "fun fixtureBytes(name: String): ByteArray = Base64.decode(fixtures[name] ?: error(\"missing fixture ${dollar}name\"))",
+            "",
+            "fun fixture(name: String): String = fixtureBytes(name).decodeToString()",
+            "",
+        ).joinToString("\n")
+        output.get().file("com/mcosta/mybooks/testing/Fixtures.kt").asFile.apply { parentFile.mkdirs(); writeText(source) }
+    }
 }
 
 kotlin {
@@ -29,10 +60,19 @@ kotlin {
         commonMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
+            implementation(libs.ktor.client.core)
+            implementation(libs.xmlutil.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.ktor.client.mock)
+        }
+        commonTest {
+            kotlin.srcDir(generateTestFixtures)
+        }
+        iosMain.dependencies {
+            implementation(libs.ktor.client.darwin)
         }
         androidMain.dependencies {
             implementation(libs.androidx.core.ktx)

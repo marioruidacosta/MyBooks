@@ -6,9 +6,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.Headers
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
-
-fun fixture(name: String): String =
-    requireNotNull(object {}.javaClass.getResource("/lookup/$name")) { "missing fixture $name" }.readText()
+import com.mcosta.mybooks.testing.fixture
 
 fun json(name: String): FakeResponse = FakeResponse().setHeader("Content-Type", "application/json").setBody(fixture(name))
 

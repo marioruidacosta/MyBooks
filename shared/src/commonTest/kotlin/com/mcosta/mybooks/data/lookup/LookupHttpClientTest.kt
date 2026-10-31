@@ -1,8 +1,8 @@
 package com.mcosta.mybooks.data.lookup
 
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.Test
 
 class LookupHttpClientTest {
     private val server = FakeHttpServer()
