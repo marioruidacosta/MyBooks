@@ -29,7 +29,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -52,13 +53,14 @@ import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.ui.components.BookCover
 import com.mcosta.mybooks.ui.components.RatingStars
 
-private val tabs = listOf(null, ReadingStatus.READ, ReadingStatus.TO_READ, ReadingStatus.WISHLIST)
+private val tabs = listOf(null) + ReadingStatus.entries
 
 fun ReadingStatus?.label() = when (this) {
     null -> "All"
-    ReadingStatus.READ -> "Read"
+    ReadingStatus.READING -> "Reading"
     ReadingStatus.TO_READ -> "To read"
-    ReadingStatus.WISHLIST -> "Wishlist"
+    ReadingStatus.READ -> "Read"
+    ReadingStatus.WISHLIST -> "To buy"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -104,7 +106,7 @@ fun LibraryScreen(
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            PrimaryTabRow(selectedTabIndex = tabs.indexOf(state.tab)) {
+            PrimaryScrollableTabRow(selectedTabIndex = tabs.indexOf(state.tab), edgePadding = 8.dp) {
                 tabs.forEach { status ->
                     Tab(
                         selected = state.tab == status,
@@ -158,6 +160,12 @@ private fun BookRow(book: Book, onClick: () -> Unit) {
                 )
             }
             if (book.rating != null) RatingStars(book.rating, onRate = null, size = 16.dp)
+            if (book.status == ReadingStatus.READING && book.progressPercent != null) {
+                LinearProgressIndicator(
+                    progress = { book.progressPercent / 100f },
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                )
+            }
         }
     }
 }

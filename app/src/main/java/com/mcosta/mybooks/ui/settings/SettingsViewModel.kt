@@ -13,22 +13,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.FileNotFoundException
+import java.io.OutputStream
 
-/** Reads and writes text documents picked by the user. */
+/** Reads and writes documents picked by the user. */
 interface IoPort {
-    suspend fun write(uri: Uri, text: String)
-    suspend fun read(uri: Uri): String
+    suspend fun write(uri: Uri, writer: suspend (OutputStream) -> Unit)
+    suspend fun read(uri: Uri): ByteArray
 }
 
 class ContentResolverIo(private val resolver: ContentResolver) : IoPort {
-    override suspend fun write(uri: Uri, text: String) = withContext(Dispatchers.IO) {
+    override suspend fun write(uri: Uri, writer: suspend (OutputStream) -> Unit) = withContext(Dispatchers.IO) {
         val out = resolver.openOutputStream(uri, "wt") ?: throw FileNotFoundException("Can't open $uri")
-        out.use { it.write(text.toByteArray()) }
+        out.use { writer(it) }
     }
 
-    override suspend fun read(uri: Uri): String = withContext(Dispatchers.IO) {
+    override suspend fun read(uri: Uri): ByteArray = withContext(Dispatchers.IO) {
         val input = resolver.openInputStream(uri) ?: throw FileNotFoundException("Can't open $uri")
-        input.use { it.readBytes().decodeToString() }
+        input.use { it.readBytes() }
     }
 }
 
@@ -37,14 +38,13 @@ class SettingsViewModel(private val repo: BookRepository, private val io: IoPort
     val message: StateFlow<String?> = _message.asStateFlow()
 
     fun export(uri: Uri) = run("Export failed") {
-        val json = repo.exportJson()
-        io.write(uri, json)
+        io.write(uri) { repo.exportBackup(it) }
         val count = repo.bookCount()
         "Library exported ($count ${if (count == 1) "book" else "books"})"
     }
 
     fun import(uri: Uri) = run("Import failed") {
-        val s = repo.importJson(io.read(uri))
+        val s = repo.importBackup(io.read(uri))
         "Imported: ${s.added} added, ${s.updated} updated, ${s.failed} failed"
     }
 

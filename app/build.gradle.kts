@@ -1,8 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+}
+
+// Secrets live in the untracked local.properties, e.g. GOOGLE_BOOKS_API_KEY=AIza...
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
 
 android {
@@ -13,8 +20,11 @@ android {
         applicationId = "com.mcosta.mybooks"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+
+        val googleBooksKey = localProperties.getProperty("GOOGLE_BOOKS_API_KEY", "").trim()
+        buildConfigField("String", "GOOGLE_BOOKS_API_KEY", "\"$googleBooksKey\"")
     }
 
     buildTypes {
@@ -28,6 +38,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     testOptions {
         unitTests.isIncludeAndroidResources = true
@@ -62,10 +73,15 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.play.services.code.scanner)
+    implementation(libs.androidx.exifinterface)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.okhttp.mockwebserver)
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }

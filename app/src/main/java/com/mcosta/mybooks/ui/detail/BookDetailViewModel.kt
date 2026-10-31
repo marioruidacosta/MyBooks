@@ -51,6 +51,31 @@ class BookDetailViewModel(
         viewModelScope.launch { repo.setRating(id, rating) }
     }
 
+    private val _progressError = MutableStateFlow<String?>(null)
+    val progressError: StateFlow<String?> = _progressError.asStateFlow()
+
+    /** Updates reading progress from typed [input]: a page number, or a percentage when [byPages] is false. */
+    fun updateProgress(input: String, byPages: Boolean) {
+        val value = input.trim().toIntOrNull()
+        _progressError.value = when {
+            byPages && (value == null || value < 0) -> "Enter a page number"
+            !byPages && (value == null || value !in 0..100) -> "Enter a percentage from 0 to 100"
+            else -> null
+        }
+        if (_progressError.value != null || value == null) return
+        viewModelScope.launch {
+            if (byPages) repo.setProgressPages(id, value) else repo.setProgressPercent(id, value)
+        }
+    }
+
+    fun setCover(coverRef: String) {
+        viewModelScope.launch { repo.setCover(id, coverRef) }
+    }
+
+    fun setDateStarted(date: Long) {
+        viewModelScope.launch { repo.setDateStarted(id, date) }
+    }
+
     fun editNotes(text: String) {
         _notesDraft.value = text
     }

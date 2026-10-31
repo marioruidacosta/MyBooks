@@ -114,6 +114,107 @@ class BookRepositoryTest {
     }
 
     @Test
+    fun markReadingSetsDateStarted() = runTest {
+        val id = saveOk(Book(title = "Dune"))
+        now = 3000L
+        repo.setStatus(id, ReadingStatus.READING)
+        assertEquals(3000L, get(id).dateStarted)
+    }
+
+    @Test
+    fun savingAsReadingSetsDateStarted() = runTest {
+        val id = saveOk(Book(title = "Dune", status = ReadingStatus.READING))
+        assertEquals(1000L, get(id).dateStarted)
+    }
+
+    @Test
+    fun markReadingKeepsExistingDateStarted() = runTest {
+        val id = saveOk(Book(title = "Dune", status = ReadingStatus.READING, dateStarted = 42L))
+        now = 3000L
+        repo.setStatus(id, ReadingStatus.READING)
+        assertEquals(42L, get(id).dateStarted)
+    }
+
+    @Test
+    fun finishingKeepsDateStartedAndProgress() = runTest {
+        val id = saveOk(Book(title = "Dune", pageCount = 200, status = ReadingStatus.READING))
+        repo.setProgressPages(id, 50)
+        now = 9000L
+        repo.setStatus(id, ReadingStatus.READ)
+        assertEquals(1000L, get(id).dateStarted)
+        assertEquals(9000L, get(id).dateRead)
+        assertEquals(50, get(id).currentPage)
+    }
+
+    @Test
+    fun backToToReadOrToBuyClearsStartAndProgress() = runTest {
+        val id = saveOk(Book(title = "Dune", pageCount = 200, status = ReadingStatus.READING))
+        repo.setProgressPages(id, 50)
+        repo.setStatus(id, ReadingStatus.TO_READ)
+        assertNull(get(id).dateStarted)
+        assertNull(get(id).currentPage)
+        assertNull(get(id).progressPercent)
+    }
+
+    @Test
+    fun progressByPageComputesPercent() = runTest {
+        val id = saveOk(Book(title = "Dune", pageCount = 200, status = ReadingStatus.READING))
+        repo.setProgressPages(id, 50)
+        assertEquals(50, get(id).currentPage)
+        assertEquals(25, get(id).progressPercent)
+    }
+
+    @Test
+    fun progressByPageWithoutPageCountHasNoPercent() = runTest {
+        val id = saveOk(Book(title = "Dune", status = ReadingStatus.READING))
+        repo.setProgressPages(id, 50)
+        assertEquals(50, get(id).currentPage)
+        assertNull(get(id).progressPercent)
+    }
+
+    @Test
+    fun progressPastLastPageCapsAt100Percent() = runTest {
+        val id = saveOk(Book(title = "Dune", pageCount = 200, status = ReadingStatus.READING))
+        repo.setProgressPages(id, 230)
+        assertEquals(100, get(id).progressPercent)
+    }
+
+    @Test
+    fun progressByPercentClearsPage() = runTest {
+        val id = saveOk(Book(title = "Dune", pageCount = 200, status = ReadingStatus.READING))
+        repo.setProgressPages(id, 50)
+        repo.setProgressPercent(id, 60)
+        assertEquals(60, get(id).progressPercent)
+        assertNull(get(id).currentPage)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun progressPercentOver100Throws() = runTest {
+        val id = saveOk(Book(title = "Dune", status = ReadingStatus.READING))
+        repo.setProgressPercent(id, 101)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun negativePageThrows() = runTest {
+        val id = saveOk(Book(title = "Dune", status = ReadingStatus.READING))
+        repo.setProgressPages(id, -1)
+    }
+
+    @Test
+    fun setDateStarted() = runTest {
+        val id = saveOk(Book(title = "Dune", status = ReadingStatus.READING))
+        repo.setDateStarted(id, 77L)
+        assertEquals(77L, get(id).dateStarted)
+    }
+
+    @Test
+    fun saveCoercesOutOfRangeProgress() = runTest {
+        val id = saveOk(Book(title = "Dune", status = ReadingStatus.READING, progressPercent = 140, currentPage = -3))
+        assertEquals(100, get(id).progressPercent)
+        assertNull(get(id).currentPage)
+    }
+
+    @Test
     fun setRatingAndClear() = runTest {
         val id = saveOk(Book(title = "Dune"))
         repo.setRating(id, 4)

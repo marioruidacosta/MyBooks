@@ -1,18 +1,27 @@
 # MyBooks
 
 A personal book library for Android. Scan a book's barcode to add it, give it a 1–5 star score,
-keep notes, and track every book as **Read**, **To read** (you own it) or **Wishlist** (to buy).
+keep notes, and track every book as **Reading** (with start date and progress), **To read** (you own it),
+**Read** or **To buy**.
 All data stays on the phone; you can export/import it as a JSON backup from Settings.
 
 ## Features
 
 - **Scan barcode** (Add button → Scan barcode): reads the ISBN on the back cover and fills in title,
-  author, cover, publisher, year and pages from Google Books, falling back to Open Library.
+  author, cover, publisher, year and pages. Sources, in order: **BNP / PORBASE** (Biblioteca Nacional
+  de Portugal), **Google Books**, **Open Library**. If the first source to find the book has no cover,
+  the others are asked for one.
   Scanning a book you already have opens it. Not found / offline → enter the details by hand.
-- **Library** tabs: All / Read / To read / Wishlist, plus search by title or author.
+- **Library** tabs: All / Reading / To read / Read / To buy, plus search by title or author.
+- **Reading**: the start date is recorded when a book moves to Reading (tap *Change* to edit it);
+  update progress by page number or percentage. Reading books show a progress bar in the list.
 - **Book page**: change status, tap stars to rate (tap the same star again to clear), write notes
   (saved automatically). Marking a book Read records the date.
-- **Settings**: export the library to a file / import it back (merges by ISBN, never deletes).
+- **Cover photo**: when no cover is found, tap the empty cover on the book page (or *Take photo* in
+  the edit form) to photograph the book with the phone's camera app. Photos are shrunk to about
+  1000 px and stored privately in the app.
+- **Settings**: export the library, including cover photos, to a `.zip` file / import it back
+  (older `.json` backups still import; merges, never deletes).
 
 Scanning uses Google's code scanner from Google Play services, so the phone needs Play services
 (almost all Android phones have them). No camera permission is requested.
@@ -25,6 +34,26 @@ Point the build at the SDK in `local.properties` (not committed):
 ```properties
 sdk.dir=C\:\\Users\\<you>\\devtools\\android-sdk
 ```
+
+### Google Books API key (recommended)
+
+Without a key, Google Books requests share Google's anonymous daily quota, which is usually used up
+(HTTP 429). The app then falls back to Open Library, which knows far fewer books. A free key gives
+you your own quota (1,000 requests/day by default):
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) create a project (no billing needed).
+2. *APIs & Services → Library* → enable **Books API**.
+3. *APIs & Services → Credentials → Create credentials → API key*.
+4. Optional but sensible: edit the key and under *API restrictions* allow only **Books API**.
+   Leave *Application restrictions* at **None** — the app calls the API directly, so an
+   "Android apps" restriction makes every request fail with "API key rejected".
+5. Add it to `local.properties` and rebuild:
+
+   ```properties
+   GOOGLE_BOOKS_API_KEY=AIza...
+   ```
+
+The key is compiled into the APK, so don't share the APK publicly.
 
 Then:
 

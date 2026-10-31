@@ -31,7 +31,7 @@ import java.time.LocalDate
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val message by viewModel.message.collectAsStateWithLifecycle()
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         uri?.let(viewModel::export)
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -54,19 +54,20 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
         ) {
             Text("Backup", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Save your whole library to a file, or restore it from one. Importing merges by ISBN: " +
-                    "matching books are updated, others are added. Nothing is deleted.",
+                "Save your whole library, including cover photos, to a .zip file, or restore it " +
+                    "(older .json backups work too). Importing merges: matching books are updated, " +
+                    "others are added. Nothing is deleted.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             OutlinedButton(
-                onClick = { exportLauncher.launch("mybooks-backup-${LocalDate.now()}.json") },
+                onClick = { exportLauncher.launch("mybooks-backup-${LocalDate.now()}.zip") },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Filled.Upload, null)
                 Text("  Export library")
             }
             OutlinedButton(
-                onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
+                onClick = { importLauncher.launch(arrayOf("application/zip", "application/json", "text/plain", "*/*")) },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Filled.Download, null)

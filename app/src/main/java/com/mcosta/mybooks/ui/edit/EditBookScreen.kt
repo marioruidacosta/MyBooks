@@ -31,6 +31,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
+import com.mcosta.mybooks.data.covers.CoverStore
+import com.mcosta.mybooks.ui.components.rememberCoverPhotoTaker
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mcosta.mybooks.ui.components.BookCover
 import com.mcosta.mybooks.ui.components.RatingStars
@@ -41,6 +46,11 @@ import com.mcosta.mybooks.ui.components.StatusSelector
 fun EditBookScreen(viewModel: EditBookViewModel, isNew: Boolean, onBack: () -> Unit, onSaved: (Long) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val f = state.form
+    val context = LocalContext.current
+    val takePhoto = rememberCoverPhotoTaker(
+        onPhoto = { ref -> viewModel.update { it.copy(coverUrl = ref) } },
+        onError = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() },
+    )
 
     LaunchedEffect(state.savedId) { state.savedId?.let(onSaved) }
 
@@ -80,7 +90,10 @@ fun EditBookScreen(viewModel: EditBookViewModel, isNew: Boolean, onBack: () -> U
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                BookCover(f.coverUrl, Modifier.width(80.dp).height(120.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    BookCover(f.coverUrl, Modifier.width(80.dp).height(120.dp))
+                    TextButton(onClick = takePhoto) { Text("Take photo") }
+                }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Field("Title *", f.title) { v -> viewModel.update { it.copy(title = v) } }
                     Field("Authors", f.authors) { v -> viewModel.update { it.copy(authors = v) } }
@@ -94,7 +107,14 @@ fun EditBookScreen(viewModel: EditBookViewModel, isNew: Boolean, onBack: () -> U
                 Field("Year", f.year, KeyboardType.Number, Modifier.weight(1f)) { v -> viewModel.update { it.copy(year = v) } }
                 Field("Pages", f.pages, KeyboardType.Number, Modifier.weight(1f)) { v -> viewModel.update { it.copy(pages = v) } }
             }
-            Field("Cover URL", f.coverUrl, KeyboardType.Uri) { v -> viewModel.update { it.copy(coverUrl = v) } }
+            if (f.coverUrl.startsWith(CoverStore.PREFIX)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Cover photo", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { viewModel.update { it.copy(coverUrl = "") } }) { Text("Remove") }
+                }
+            } else {
+                Field("Cover URL", f.coverUrl, KeyboardType.Uri) { v -> viewModel.update { it.copy(coverUrl = v) } }
+            }
             Field("Description", f.description, singleLine = false) { v -> viewModel.update { it.copy(description = v) } }
             Field("Notes", f.notes, singleLine = false) { v -> viewModel.update { it.copy(notes = v) } }
         }

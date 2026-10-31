@@ -11,6 +11,7 @@ class BackupSerializerTest {
         id = 9, isbn = "9780441013593", title = "Dune", authors = "Frank Herbert", publisher = "Ace",
         publishedYear = 1990, pageCount = 535, coverUrl = "https://x/y.jpg", description = "desc",
         status = ReadingStatus.READ, rating = 5, notes = "great", dateAdded = 100, dateRead = 200,
+        dateStarted = 50, currentPage = 535, progressPercent = 100,
     )
 
     @Test
