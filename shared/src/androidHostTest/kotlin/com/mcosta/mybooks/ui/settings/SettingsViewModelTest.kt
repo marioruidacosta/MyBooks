@@ -1,7 +1,7 @@
 package com.mcosta.mybooks.ui.settings
 
 import android.net.Uri
-import com.mcosta.mybooks.MainDispatcherRule
+import com.mcosta.mybooks.MainDispatcherTest
 import com.mcosta.mybooks.data.BookRepository
 import com.mcosta.mybooks.data.FakeBookDao
 import com.mcosta.mybooks.data.backup.BackupSerializer
@@ -10,7 +10,6 @@ import com.mcosta.mybooks.data.lookup.LookupResult
 import com.mcosta.mybooks.domain.Book
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -22,8 +21,7 @@ import java.util.zip.ZipInputStream
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
-class SettingsViewModelTest {
-    @get:Rule val mainRule = MainDispatcherRule()
+class SettingsViewModelTest : MainDispatcherTest() {
 
     private val dao = FakeBookDao()
     private val repo = BookRepository(dao, object : BookLookupService {

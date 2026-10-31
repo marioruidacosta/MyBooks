@@ -6,7 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.CreationExtras
-import com.mcosta.mybooks.MainDispatcherRule
+import com.mcosta.mybooks.MainDispatcherTest
 import com.mcosta.mybooks.data.BookRepository
 import com.mcosta.mybooks.data.FakeBookDao
 import com.mcosta.mybooks.data.SaveResult
@@ -18,17 +18,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Rule
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.Test
 import kotlin.reflect.KClass
 
-class BookDetailViewModelTest {
-    @get:Rule val mainRule = MainDispatcherRule()
-
+class BookDetailViewModelTest : MainDispatcherTest() {
     private val dao = FakeBookDao()
     private val repo = BookRepository(dao, object : BookLookupService {
         override suspend fun lookup(isbn: String): LookupResult = LookupResult.NotFound

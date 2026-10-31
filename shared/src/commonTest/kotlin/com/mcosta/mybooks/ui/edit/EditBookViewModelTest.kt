@@ -1,6 +1,6 @@
 package com.mcosta.mybooks.ui.edit
 
-import com.mcosta.mybooks.MainDispatcherRule
+import com.mcosta.mybooks.MainDispatcherTest
 import com.mcosta.mybooks.data.BookRepository
 import com.mcosta.mybooks.data.FakeBookDao
 import com.mcosta.mybooks.data.SaveResult
@@ -10,19 +10,15 @@ import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Rule
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.Test
 import com.mcosta.mybooks.data.lookup.HttpStatusException
-import java.io.IOException
-import java.net.UnknownHostException
+import kotlinx.io.IOException
 
-class EditBookViewModelTest {
-    @get:Rule val mainRule = MainDispatcherRule()
-
+class EditBookViewModelTest : MainDispatcherTest() {
     private val dao = FakeBookDao()
     private var lookupResult: LookupResult = LookupResult.NotFound
     private val repo = BookRepository(dao, object : BookLookupService {
@@ -56,10 +52,10 @@ class EditBookViewModelTest {
 
     @Test
     fun lookupErrorShowsReason() = runTest {
-        lookupResult = LookupResult.Error(UnknownHostException("www.googleapis.com"))
+        lookupResult = LookupResult.Error(HttpStatusException(503))
         val vm = EditBookViewModel(repo, bookId = null, isbn = "9780306406157")
         assertEquals(
-            "Couldn't reach the book databases (no internet connection) — enter the details manually",
+            "Couldn't reach the book databases (server error (HTTP 503)) — enter the details manually",
             vm.state.value.message,
         )
     }

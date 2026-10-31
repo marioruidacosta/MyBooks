@@ -1,9 +1,9 @@
 package com.mcosta.mybooks.ui.detail
 
 import com.mcosta.mybooks.domain.Book
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.Test
 
 class ProgressTextTest {
     private val book = Book(title = "Dune")

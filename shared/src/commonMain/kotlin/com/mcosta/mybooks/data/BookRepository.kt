@@ -15,6 +15,7 @@ import com.mcosta.mybooks.domain.Isbn
 import com.mcosta.mybooks.domain.ReadingStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlin.time.Clock
 
 sealed interface SaveResult {
     data class Saved(val id: Long) : SaveResult
@@ -30,7 +31,7 @@ data class ImportSummary(val added: Int, val updated: Int, val failed: Int)
 class BookRepository(
     private val dao: BookDao,
     private val lookupService: BookLookupService,
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long = { Clock.System.now().toEpochMilliseconds() },
     /** Runs a block atomically; the app passes a Room write transaction. */
     private val transactionRunner: suspend (suspend () -> Unit) -> Unit = { it() },
     /** Cover photos taken in the app; null in tests that don't involve them. */

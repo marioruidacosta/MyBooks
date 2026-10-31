@@ -6,10 +6,11 @@ import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 class BookRepositoryTest {
     private val dao = FakeBookDao()
@@ -188,16 +189,16 @@ class BookRepositoryTest {
         assertNull(get(id).currentPage)
     }
 
-    @Test(expected = IllegalArgumentException::class)
+    @Test
     fun progressPercentOver100Throws() = runTest {
         val id = saveOk(Book(title = "Dune", status = ReadingStatus.READING))
-        repo.setProgressPercent(id, 101)
+        assertFailsWith<IllegalArgumentException> { repo.setProgressPercent(id, 101) }
     }
 
-    @Test(expected = IllegalArgumentException::class)
+    @Test
     fun negativePageThrows() = runTest {
         val id = saveOk(Book(title = "Dune", status = ReadingStatus.READING))
-        repo.setProgressPages(id, -1)
+        assertFailsWith<IllegalArgumentException> { repo.setProgressPages(id, -1) }
     }
 
     @Test
@@ -223,10 +224,10 @@ class BookRepositoryTest {
         assertNull(get(id).rating)
     }
 
-    @Test(expected = IllegalArgumentException::class)
+    @Test
     fun setRatingOutOfRangeThrows() = runTest {
         val id = saveOk(Book(title = "Dune"))
-        repo.setRating(id, 7)
+        assertFailsWith<IllegalArgumentException> { repo.setRating(id, 7) }
     }
 
     @Test

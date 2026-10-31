@@ -64,6 +64,7 @@ kotlin {
             implementation(libs.xmlutil.core)
             implementation(libs.okio)
             implementation(libs.room.runtime)
+            implementation(libs.jb.lifecycle.viewmodel)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

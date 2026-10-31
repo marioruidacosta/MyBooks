@@ -1,6 +1,6 @@
 package com.mcosta.mybooks.ui.library
 
-import com.mcosta.mybooks.MainDispatcherRule
+import com.mcosta.mybooks.MainDispatcherTest
 import com.mcosta.mybooks.data.BookRepository
 import com.mcosta.mybooks.data.FakeBookDao
 import com.mcosta.mybooks.data.lookup.BookLookupService
@@ -9,13 +9,10 @@ import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Rule
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.Test
 
-class LibraryViewModelTest {
-    @get:Rule val mainRule = MainDispatcherRule()
-
+class LibraryViewModelTest : MainDispatcherTest() {
     private val repo = BookRepository(FakeBookDao(), object : BookLookupService {
         override suspend fun lookup(isbn: String): LookupResult = LookupResult.NotFound
     })
@@ -26,7 +23,7 @@ class LibraryViewModelTest {
         repo.save(Book(title = "Emma", authors = "Jane Austen", status = ReadingStatus.WISHLIST))
         repo.save(Book(title = "Persuasion", authors = "Jane Austen", status = ReadingStatus.READ))
         val vm = LibraryViewModel(repo)
-        backgroundScope.launch(mainRule.dispatcher) { vm.state.collect {} }
+        backgroundScope.launch(mainDispatcher) { vm.state.collect {} }
 
         assertEquals(listOf("Dune", "Emma", "Persuasion"), vm.state.value.books.map { it.title })
 
