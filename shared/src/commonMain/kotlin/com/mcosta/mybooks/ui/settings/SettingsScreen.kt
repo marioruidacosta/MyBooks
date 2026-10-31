@@ -1,7 +1,5 @@
 package com.mcosta.mybooks.ui.settings
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,18 +23,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val message by viewModel.message.collectAsStateWithLifecycle()
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
-        uri?.let(viewModel::export)
-    }
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let(viewModel::import)
-    }
 
     Scaffold(
         topBar = {
@@ -60,14 +51,14 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
             )
             OutlinedButton(
-                onClick = { exportLauncher.launch("mybooks-backup-${LocalDate.now()}.zip") },
+                onClick = viewModel::export,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Filled.Upload, null)
                 Text("  Export library")
             }
             OutlinedButton(
-                onClick = { importLauncher.launch(arrayOf("application/zip", "application/json", "text/plain", "*/*")) },
+                onClick = viewModel::import,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Filled.Download, null)

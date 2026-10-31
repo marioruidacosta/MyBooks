@@ -1,32 +1,35 @@
 package com.mcosta.mybooks
 
-import android.content.Context
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
 import com.mcosta.mybooks.data.BookRepository
-import com.mcosta.mybooks.data.db.createAndroidDatabase
+import com.mcosta.mybooks.data.covers.CoverStore
+import com.mcosta.mybooks.data.db.AppDatabase
 import com.mcosta.mybooks.data.lookup.BnpClient
 import com.mcosta.mybooks.data.lookup.GoogleBooksClient
 import com.mcosta.mybooks.data.lookup.LookupChain
 import com.mcosta.mybooks.data.lookup.OpenLibraryClient
 import com.mcosta.mybooks.data.lookup.lookupHttpClient
+import io.ktor.client.engine.HttpClientEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import io.ktor.client.engine.okhttp.OkHttp
-import com.mcosta.mybooks.ui.components.coverStoreFor
 
-/** Hand-wired app dependencies, created once by the app's Application class. */
-class AppContainer(context: Context, googleBooksApiKey: String, appVersion: String) {
+/** Hand-wired app dependencies, created once per app from the platform's pieces. */
+class AppContainer(
+    database: AppDatabase,
+    httpEngine: HttpClientEngine,
+    val coverStore: CoverStore,
+    googleBooksApiKey: String,
+    userAgent: String,
+) {
     /** Outlives screens; used for writes that must finish after a screen closes. */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private val db = createAndroidDatabase(context)
-
-    private val http = lookupHttpClient(OkHttp.create(), "MyBooks/$appVersion (Android; personal library app)")
+    private val http = lookupHttpClient(httpEngine, userAgent)
 
     val repository = BookRepository(
-        dao = db.bookDao(),
+        dao = database.bookDao(),
         lookupService = LookupChain(
             listOf(
                 BnpClient(http),
@@ -34,12 +37,7 @@ class AppContainer(context: Context, googleBooksApiKey: String, appVersion: Stri
                 OpenLibraryClient(http),
             )
         ),
-        transactionRunner = { block -> db.useWriterConnection { it.immediateTransaction { block() } } },
-        coverStore = coverStoreFor(context),
+        transactionRunner = { block -> database.useWriterConnection { it.immediateTransaction { block() } } },
+        coverStore = coverStore,
     )
-}
-
-/** Implemented by the Application class so ViewModels can reach the [AppContainer]. */
-interface ContainerHolder {
-    val container: AppContainer
 }

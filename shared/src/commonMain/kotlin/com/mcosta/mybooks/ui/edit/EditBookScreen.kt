@@ -31,9 +31,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import android.widget.Toast
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.mcosta.mybooks.data.covers.CoverStore
 import com.mcosta.mybooks.ui.components.rememberCoverPhotoTaker
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,15 +49,17 @@ import com.mcosta.mybooks.ui.components.StatusSelector
 fun EditBookScreen(viewModel: EditBookViewModel, isNew: Boolean, onBack: () -> Unit, onSaved: (Long) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val f = state.form
-    val context = LocalContext.current
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val takePhoto = rememberCoverPhotoTaker(
         onPhoto = { ref -> viewModel.update { it.copy(coverUrl = ref) } },
-        onError = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() },
+        onError = { scope.launch { snackbar.showSnackbar(it) } },
     )
 
     LaunchedEffect(state.savedId) { state.savedId?.let(onSaved) }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(if (isNew) "Add book" else "Edit book") },

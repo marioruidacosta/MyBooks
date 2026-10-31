@@ -33,9 +33,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mcosta.mybooks.domain.Book
-import java.time.Instant
-import java.time.ZoneId
-import java.time.ZoneOffset
+import com.mcosta.mybooks.ui.formatDate
+import com.mcosta.mybooks.ui.localDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 /** Start date and progress for a book being read. */
 @Composable
@@ -97,7 +101,7 @@ fun ReadingSection(book: Book, viewModel: BookDetailViewModel) {
 
     if (pickingDate) {
         StartDatePicker(
-            initial = book.dateStarted ?: System.currentTimeMillis(),
+            initial = book.dateStarted ?: Clock.System.now().toEpochMilliseconds(),
             onPicked = { viewModel.setDateStarted(it); pickingDate = false },
             onDismiss = { pickingDate = false },
         )
@@ -108,17 +112,16 @@ fun ReadingSection(book: Book, viewModel: BookDetailViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StartDatePicker(initial: Long, onPicked: (Long) -> Unit, onDismiss: () -> Unit) {
-    val zone = ZoneId.systemDefault()
-    val initialUtc = Instant.ofEpochMilli(initial).atZone(zone).toLocalDate()
-        .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    val zone = TimeZone.currentSystemDefault()
+    val initialUtc = localDate(initial).atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
     val state = rememberDatePickerState(initialSelectedDateMillis = initialUtc)
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = {
                 state.selectedDateMillis?.let { utc ->
-                    val day = Instant.ofEpochMilli(utc).atZone(ZoneOffset.UTC).toLocalDate()
-                    onPicked(day.atStartOfDay(zone).toInstant().toEpochMilli())
+                    val day = Instant.fromEpochMilliseconds(utc).toLocalDateTime(TimeZone.UTC).date
+                    onPicked(day.atStartOfDayIn(zone).toEpochMilliseconds())
                 } ?: onDismiss()
             }) { Text("OK") }
         },

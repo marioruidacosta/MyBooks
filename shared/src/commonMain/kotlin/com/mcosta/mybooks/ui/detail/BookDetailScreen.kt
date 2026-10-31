@@ -39,8 +39,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalContext
-import android.widget.Toast
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import com.mcosta.mybooks.ui.formatDate
+import kotlinx.coroutines.launch
 import com.mcosta.mybooks.ui.components.rememberCoverPhotoTaker
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -50,10 +53,6 @@ import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.ui.components.BookCover
 import com.mcosta.mybooks.ui.components.RatingStars
 import com.mcosta.mybooks.ui.components.StatusSelector
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,15 +63,17 @@ fun BookDetailScreen(viewModel: BookDetailViewModel, onBack: () -> Unit, onEdit:
     var confirmDelete by remember { mutableStateOf(false) }
 
     LaunchedEffect(deleted) { if (deleted) onBack() }
-    val context = LocalContext.current
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val takePhoto = rememberCoverPhotoTaker(
         onPhoto = viewModel::setCover,
-        onError = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() },
+        onError = { scope.launch { snackbar.showSnackbar(it) } },
     )
     // Save the notes draft if the app goes to the background.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.saveNotes() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = {},
@@ -191,7 +192,3 @@ private fun Description(text: String) {
         if (!expanded) Text("More", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
     }
 }
-
-internal fun formatDate(epochMs: Long): String =
-    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-        .format(Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()))

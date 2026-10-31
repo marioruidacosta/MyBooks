@@ -4,21 +4,20 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.mcosta.mybooks.scan.IsbnScanner
-import com.mcosta.mybooks.scan.ScanOutcome
+import com.mcosta.mybooks.AppContainer
+import com.mcosta.mybooks.platform.ScanOutcome
 import com.mcosta.mybooks.ui.detail.BookDetailScreen
 import com.mcosta.mybooks.ui.detail.BookDetailViewModel
 import com.mcosta.mybooks.ui.edit.EditBookScreen
 import com.mcosta.mybooks.ui.edit.EditBookViewModel
 import com.mcosta.mybooks.ui.library.LibraryScreen
 import com.mcosta.mybooks.ui.library.LibraryViewModel
-import com.mcosta.mybooks.ui.settings.ContentResolverIo
 import com.mcosta.mybooks.ui.settings.SettingsScreen
 import com.mcosta.mybooks.ui.settings.SettingsViewModel
 import kotlinx.coroutines.launch
@@ -36,33 +35,30 @@ object Routes {
 }
 
 @Composable
-fun MyBooksNavHost() {
+fun MyBooksNavHost(container: AppContainer) {
     val nav = rememberNavController()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-    val scanner = remember(context) { IsbnScanner(context) }
+    val services = LocalPlatformServices.current
 
     NavHost(nav, startDestination = Routes.LIBRARY) {
         composable(Routes.LIBRARY) {
-            val vm = appViewModel { LibraryViewModel(it.repository) }
+            val vm = viewModel { LibraryViewModel(container.repository) }
             LibraryScreen(
                 viewModel = vm,
                 snackbarHostState = snackbar,
                 onOpenBook = { nav.navigate(Routes.book(it)) },
                 onAddManually = { nav.navigate(Routes.add()) },
                 onScan = {
-                    scanner.scan { outcome ->
-                        scope.launch {
-                            when (outcome) {
-                                is ScanOutcome.Isbn -> {
-                                    val existing = vm.findByIsbn(outcome.isbn)
-                                    nav.navigate(if (existing != null) Routes.book(existing.id) else Routes.add(outcome.isbn))
-                                }
-                                ScanOutcome.NotAnIsbn -> snackbar.showSnackbar("That barcode isn't a book ISBN")
-                                is ScanOutcome.Failed -> snackbar.showSnackbar(outcome.message)
-                                ScanOutcome.Cancelled -> Unit
+                    scope.launch {
+                        when (val outcome = services.scanner.scan()) {
+                            is ScanOutcome.Isbn -> {
+                                val existing = vm.findByIsbn(outcome.isbn)
+                                nav.navigate(if (existing != null) Routes.book(existing.id) else Routes.add(outcome.isbn))
                             }
+                            ScanOutcome.NotAnIsbn -> snackbar.showSnackbar("That barcode isn't a book ISBN")
+                            is ScanOutcome.Failed -> snackbar.showSnackbar(outcome.message)
+                            ScanOutcome.Cancelled -> Unit
                         }
                     }
                 },
@@ -73,9 +69,9 @@ fun MyBooksNavHost() {
             Routes.ADD,
             arguments = listOf(navArgument("isbn") { type = NavType.StringType; nullable = true; defaultValue = null }),
         ) { entry ->
-            val isbn = entry.arguments?.getString("isbn")
+            val isbn = entry.savedStateHandle.get<String>("isbn")
             EditBookScreen(
-                viewModel = appViewModel { EditBookViewModel(it.repository, bookId = null, isbn = isbn) },
+                viewModel = viewModel { EditBookViewModel(container.repository, bookId = null, isbn = isbn) },
                 isNew = true,
                 onBack = { nav.popBackStack() },
                 onSaved = { id ->
@@ -84,23 +80,23 @@ fun MyBooksNavHost() {
             )
         }
         composable(Routes.BOOK, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-            val id = entry.arguments!!.getLong("id")
+            val id = entry.savedStateHandle.get<Long>("id")!!
             BookDetailScreen(
-                viewModel = appViewModel { BookDetailViewModel(it.repository, id, it.applicationScope) },
+                viewModel = viewModel { BookDetailViewModel(container.repository, id, container.applicationScope) },
                 onBack = { nav.popBackStack() },
                 onEdit = { nav.navigate(Routes.edit(id)) },
             )
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(
-                viewModel = appViewModel { SettingsViewModel(it.repository, ContentResolverIo(context.contentResolver)) },
+                viewModel = viewModel { SettingsViewModel(container.repository, services.documents) },
                 onBack = { nav.popBackStack() },
             )
         }
         composable(Routes.EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-            val id = entry.arguments!!.getLong("id")
+            val id = entry.savedStateHandle.get<Long>("id")!!
             EditBookScreen(
-                viewModel = appViewModel { EditBookViewModel(it.repository, bookId = id, isbn = null) },
+                viewModel = viewModel { EditBookViewModel(container.repository, bookId = id, isbn = null) },
                 isNew = false,
                 onBack = { nav.popBackStack() },
                 onSaved = { nav.popBackStack() },
