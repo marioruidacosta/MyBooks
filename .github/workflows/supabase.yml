@@ -1,0 +1,23 @@
+name: Supabase
+
+# Starts a throwaway local Supabase (Docker) and runs the pgTAP tests in supabase/tests
+# against the migrations in supabase/migrations.
+on:
+  push:
+    paths: ["supabase/**", ".github/workflows/supabase.yml"]
+  pull_request:
+    paths: ["supabase/**", ".github/workflows/supabase.yml"]
+
+jobs:
+  db-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start local Supabase
+        run: bash .github/scripts/annotate.sh supabase start
+      - name: Database tests
+        run: bash .github/scripts/annotate.sh supabase test db

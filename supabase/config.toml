@@ -1,0 +1,24 @@
+# Supabase CLI configuration for local development and the CI database tests.
+# The hosted project is configured in the Supabase dashboard (see docs/social-setup.md).
+project_id = "mybooks"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+
+[db]
+port = 54322
+major_version = 17
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+
+[auth.email]
+enable_signup = true
+otp_length = 6
+otp_expiry = 3600
+
+[storage]
+enabled = true
