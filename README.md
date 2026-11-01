@@ -20,6 +20,9 @@ All data stays on the phone; you can export/import it as a .zip backup from Sett
 - **Cover photo**: when no cover is found, tap the empty cover on the book page (or *Take photo* in
   the edit form) to photograph the book with the phone's camera app. Photos are shrunk to about
   1000 px and stored privately in the app.
+- **Community** (optional, needs a Supabase project, see [docs/social-setup.md](docs/social-setup.md)):
+  sign in with an email code, choose a username, find people, send and accept friend requests,
+  block and report, choose who sees your activity, delete your account. Your library stays on the phone.
 - **Settings**: export the library, including cover photos, to a `.zip` file / import it back
   (older `.json` backups still import; merges, never deletes).
 

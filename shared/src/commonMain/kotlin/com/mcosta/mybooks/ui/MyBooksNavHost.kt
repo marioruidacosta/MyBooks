@@ -12,6 +12,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.mcosta.mybooks.AppContainer
 import com.mcosta.mybooks.platform.ScanOutcome
+import com.mcosta.mybooks.social.model.SessionState
+import com.mcosta.mybooks.ui.social.AccountRoute
+import com.mcosta.mybooks.ui.social.FriendsScreen
+import com.mcosta.mybooks.ui.social.FriendsViewModel
+import com.mcosta.mybooks.ui.social.ProfileScreen
+import com.mcosta.mybooks.ui.social.ProfileViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mcosta.mybooks.ui.detail.BookDetailScreen
 import com.mcosta.mybooks.ui.detail.BookDetailViewModel
 import com.mcosta.mybooks.ui.edit.EditBookScreen
@@ -28,14 +35,19 @@ object Routes {
     const val EDIT = "edit/{id}"
     const val BOOK = "book/{id}"
     const val SETTINGS = "settings"
+    const val FRIENDS = "friends"
+    const val PROFILE = "profile/{id}"
+    const val ACCOUNT = "account"
 
     fun add(isbn: String? = null) = if (isbn == null) "add" else "add?isbn=$isbn"
     fun edit(id: Long) = "edit/$id"
     fun book(id: Long) = "book/$id"
+    fun profile(userId: String) = "profile/$userId"
 }
 
 @Composable
 fun MyBooksNavHost(container: AppContainer) {
+    val social = container.social
     val nav = rememberNavController()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -63,6 +75,7 @@ fun MyBooksNavHost(container: AppContainer) {
                     }
                 },
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+                onOpenFriends = social?.let { { nav.navigate(Routes.FRIENDS) } },
             )
         }
         composable(
@@ -88,10 +101,32 @@ fun MyBooksNavHost(container: AppContainer) {
             )
         }
         composable(Routes.SETTINGS) {
+            val session = social?.auth?.session?.collectAsStateWithLifecycle()?.value
             SettingsScreen(
                 viewModel = viewModel { SettingsViewModel(container.repository, services.documents) },
                 onBack = { nav.popBackStack() },
+                accountLabel = social?.let {
+                    if (session is SessionState.SignedIn) "Your community account" else "Join the MyBooks community"
+                },
+                onOpenAccount = social?.let { { nav.navigate(Routes.ACCOUNT) } },
             )
+        }
+        if (social != null) {
+            composable(Routes.FRIENDS) {
+                FriendsScreen(
+                    viewModel = viewModel { FriendsViewModel(social) },
+                    onBack = { nav.popBackStack() },
+                    onSignIn = { nav.navigate(Routes.ACCOUNT) },
+                    onOpenPerson = { nav.navigate(Routes.profile(it)) },
+                )
+            }
+            composable(Routes.PROFILE, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+                val userId = entry.savedStateHandle.get<String>("id")!!
+                ProfileScreen(viewModel { ProfileViewModel(social, userId) }, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.ACCOUNT) {
+                AccountRoute(social, onBack = { nav.popBackStack() })
+            }
         }
         composable(Routes.EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
             val id = entry.savedStateHandle.get<Long>("id")!!

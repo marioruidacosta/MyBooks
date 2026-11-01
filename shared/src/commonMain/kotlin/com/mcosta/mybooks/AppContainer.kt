@@ -46,5 +46,12 @@ class AppContainer(
     )
 
     /** The community features, or null when Supabase isn't configured (then they're hidden). */
-    val social: SocialServices? = if (socialConfig.enabled) createSocialServices(socialConfig, httpEngine) else null
+    val social: SocialServices? = socialFor(socialConfig, httpEngine)
 }
+
+/** The social services when [config] is complete, else null (nothing is created or contacted). */
+internal fun socialFor(
+    config: SocialConfig,
+    engine: HttpClientEngine,
+    factory: (SocialConfig, HttpClientEngine) -> SocialServices = ::createSocialServices,
+): SocialServices? = if (config.enabled) factory(config, engine) else null
