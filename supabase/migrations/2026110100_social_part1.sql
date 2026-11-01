@@ -9,7 +9,7 @@ create table profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   username text not null unique check (username ~ '^[a-z0-9_.]{3,20}$'),
   display_name text not null check (char_length(display_name) between 1 and 50),
-  avatar_path text,
+  avatar_path text check (avatar_path is null or avatar_path like id::text || '/%'),
   visibility visibility not null default 'friends',
   created_at timestamptz not null default now()
 );
@@ -39,7 +39,9 @@ create index blocks_blocked on blocks (blocked);
 create table reports (
   id bigint generated always as identity primary key,
   reporter uuid references profiles (id) on delete set null,
-  reported uuid not null references profiles (id) on delete cascade,
+  -- Kept (with the username) when the reported account is deleted, so reports can't be erased that way.
+  reported uuid references profiles (id) on delete set null,
+  reported_username text,
   reason report_reason not null,
   details text check (char_length(details) <= 1000),
   created_at timestamptz not null default now()
@@ -47,12 +49,15 @@ create table reports (
 
 -- Helpers ----------------------------------------------------------------------------------
 
-create function is_blocked_between(a uuid, b uuid) returns boolean
-language sql stable security definer set search_path = public as $$
+-- Whether the caller and [other] are blocked either way. Scoped to the caller, so nobody can ask about
+-- other people's blocks.
+create function is_blocked_with(other uuid) returns boolean
+language sql stable security definer set search_path = public as $
   select exists (
-    select 1 from blocks where (blocker = a and blocked = b) or (blocker = b and blocked = a)
+    select 1 from blocks
+    where (blocker = auth.uid() and blocked = other) or (blocker = other and blocked = auth.uid())
   );
-$$;
+$;
 
 create function require_user() returns uuid
 language plpgsql stable set search_path = public as $$
@@ -75,8 +80,15 @@ alter table reports enable row level security;
 
 revoke all on profiles, friendships, blocks, reports from anon;
 
+-- Signed-in users write only through the policies below and the functions, and only these columns.
+revoke insert, update, delete, truncate, references, trigger on profiles, friendships, blocks, reports from authenticated;
+grant insert (id, username, display_name) on profiles to authenticated;
+grant update (username, display_name, visibility, avatar_path) on profiles to authenticated;
+grant delete on friendships, blocks to authenticated;
+grant insert (reporter, reported, reason, details) on reports to authenticated;
+
 create policy profiles_select on profiles for select to authenticated
-  using (not is_blocked_between(auth.uid(), id));
+  using (not is_blocked_with(id));
 create policy profiles_insert on profiles for insert to authenticated
   with check (id = auth.uid());
 create policy profiles_update on profiles for update to authenticated
@@ -95,6 +107,16 @@ create policy blocks_delete on blocks for delete to authenticated
 create policy reports_insert on reports for insert to authenticated
   with check (reporter = auth.uid() and reported <> auth.uid());
 
+create function set_reported_username() returns trigger
+language plpgsql security definer set search_path = public as $
+begin
+  new.reported_username := (select username from profiles where id = new.reported);
+  return new;
+end;
+$;
+create trigger reports_reported_username before insert on reports
+  for each row execute function set_reported_username();
+
 -- Functions --------------------------------------------------------------------------------
 
 -- Sends a request, or accepts the other person's pending request to me (both asked = friends).
@@ -107,7 +129,7 @@ begin
   if target = me then
     raise exception 'cannot befriend yourself' using errcode = '22023';
   end if;
-  if not exists (select 1 from profiles where id = target) or is_blocked_between(me, target) then
+  if not exists (select 1 from profiles where id = target) or is_blocked_with(target) then
     raise exception 'profile not available' using errcode = 'P0002';
   end if;
 
@@ -177,7 +199,7 @@ language sql stable security definer set search_path = public as $$
   select p.* from profiles p, q
   where char_length(q.text) >= 2
     and p.id <> auth.uid()
-    and not is_blocked_between(auth.uid(), p.id)
+    and not is_blocked_with(p.id)
     and (p.username ilike q.pattern or p.display_name ilike q.pattern)
   order by (p.username ilike q.text || '%') desc, p.username
   limit least(greatest(search_profiles.max, 1), 50);
@@ -202,14 +224,22 @@ begin
 end;
 $$;
 
-revoke all on function is_blocked_between(uuid, uuid), send_friend_request(uuid), respond_to_friend_request(uuid, boolean),
+revoke all on function is_blocked_with(uuid), send_friend_request(uuid), respond_to_friend_request(uuid, boolean),
   block_user(uuid), search_profiles(text, int), my_blocked_profiles(), delete_my_account(), require_user() from public, anon;
-grant execute on function is_blocked_between(uuid, uuid), send_friend_request(uuid), respond_to_friend_request(uuid, boolean),
+grant execute on function is_blocked_with(uuid), send_friend_request(uuid), respond_to_friend_request(uuid, boolean),
   block_user(uuid), search_profiles(text, int), my_blocked_profiles(), delete_my_account(), require_user() to authenticated;
 
 -- Avatars ----------------------------------------------------------------------------------
 
-insert into storage.buckets (id, name, public) values ('avatars', 'avatars', true) on conflict (id) do nothing;
+-- Public read; at most 1 MB, JPEG only (the app uploads 512 px JPEGs).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 1048576, array['image/jpeg'])
+on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+-- Owners must see their own objects: the Storage API's upload and delete return the affected rows.
+create policy avatars_select_own on storage.objects for select to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
 
 create policy avatars_insert_own on storage.objects for insert to authenticated
   with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
