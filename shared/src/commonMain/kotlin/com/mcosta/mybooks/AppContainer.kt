@@ -13,6 +13,7 @@ import com.mcosta.mybooks.data.lookup.lookupHttpClient
 import com.mcosta.mybooks.social.SocialConfig
 import com.mcosta.mybooks.social.SocialServices
 import com.mcosta.mybooks.social.supabase.createSocialServices
+import com.russhwolf.settings.Settings
 import io.ktor.client.engine.HttpClientEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,7 @@ class AppContainer(
     googleBooksApiKey: String,
     userAgent: String,
     socialConfig: SocialConfig = SocialConfig("", ""),
+    socialSettings: Settings? = null,
 ) {
     /** Outlives screens; used for writes that must finish after a screen closes. */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -46,7 +48,9 @@ class AppContainer(
     )
 
     /** The community features, or null when Supabase isn't configured (then they're hidden). */
-    val social: SocialServices? = socialFor(socialConfig, httpEngine)
+    val social: SocialServices? = socialFor(socialConfig, httpEngine) { config, engine ->
+        createSocialServices(config, engine, socialSettings)
+    }
 }
 
 /** The social services when [config] is complete, else null (nothing is created or contacted). */

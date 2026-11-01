@@ -19,6 +19,9 @@ import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.MemoryCodeVerifierCache
 import io.github.jan.supabase.auth.MemorySessionManager
 import io.github.jan.supabase.auth.OtpType
+import com.russhwolf.settings.Settings
+import io.github.jan.supabase.auth.SettingsCodeVerifierCache
+import io.github.jan.supabase.auth.SettingsSessionManager
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.exception.AuthRestException
 import io.github.jan.supabase.auth.providers.builtin.OTP
@@ -46,13 +49,26 @@ import kotlinx.serialization.json.put
 import kotlin.time.Clock
 
 /** The app's social services on a real Supabase project. */
-fun createSocialServices(config: SocialConfig, engine: HttpClientEngine): SocialServices =
-    SupabaseSocial(supabaseClient(config, engine, persistSession = true)).services
+/**
+ * [settings]: where the sign-in session is kept; null uses the library default (NSUserDefaults on
+ * iOS). Android passes its SharedPreferences: the default there needs an androidx-startup hook.
+ */
+fun createSocialServices(config: SocialConfig, engine: HttpClientEngine, settings: Settings? = null): SocialServices =
+    SupabaseSocial(supabaseClient(config, engine, persistSession = true, settings)).services
 
-internal fun supabaseClient(config: SocialConfig, engine: HttpClientEngine, persistSession: Boolean): SupabaseClient =
+internal fun supabaseClient(
+    config: SocialConfig,
+    engine: HttpClientEngine,
+    persistSession: Boolean,
+    settings: Settings? = null,
+): SupabaseClient =
     createSupabaseClient(supabaseUrl = config.url.trim(), supabaseKey = config.anonKey.trim()) {
         httpEngine = engine
         install(Auth) {
+            if (settings != null) {
+                sessionManager = SettingsSessionManager(settings)
+                codeVerifierCache = SettingsCodeVerifierCache(settings)
+            }
             if (!persistSession) {
                 sessionManager = MemorySessionManager()
                 codeVerifierCache = MemoryCodeVerifierCache()
@@ -68,6 +84,7 @@ internal fun supabaseClient(config: SocialConfig, engine: HttpClientEngine, pers
 /** Maps any failure to the [SocialException] kinds the screens explain. */
 internal fun mapSocialError(e: Throwable): SocialException = when {
     e is SocialException -> e
+    isTlsFailure(e) -> SocialException(SocialException.Kind.SECURE_CONNECTION, "secure connection failed", e)
     e is HttpRequestException || e is IOException -> SocialException(SocialException.Kind.OFFLINE, "offline", e)
     e is AuthRestException && (e.errorCode?.value == "otp_expired" || e.message.orEmpty().contains("expired", ignoreCase = true) ||
         e.message.orEmpty().contains("invalid", ignoreCase = true)) ->
@@ -93,6 +110,7 @@ internal class SupabaseSocial(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {
+        logSocialError(e)
         throw mapSocialError(e)
     }
 

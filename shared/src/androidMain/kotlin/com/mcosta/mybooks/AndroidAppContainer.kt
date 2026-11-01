@@ -4,6 +4,7 @@ import android.content.Context
 import com.mcosta.mybooks.data.covers.CoverStore
 import com.mcosta.mybooks.data.db.createAndroidDatabase
 import com.mcosta.mybooks.social.SocialConfig
+import com.russhwolf.settings.SharedPreferencesSettings
 import io.ktor.client.engine.okhttp.OkHttp
 import okio.FileSystem
 import okio.Path.Companion.toOkioPath
@@ -16,4 +17,6 @@ fun androidAppContainer(context: Context, googleBooksApiKey: String, appVersion:
     googleBooksApiKey = googleBooksApiKey,
     userAgent = "MyBooks/$appVersion (Android; personal library app)",
     socialConfig = socialConfig,
+    // Session in the app's own preferences (the library default needs an androidx-startup hook).
+    socialSettings = SharedPreferencesSettings(context.getSharedPreferences("mybooks_community", Context.MODE_PRIVATE)),
 )
