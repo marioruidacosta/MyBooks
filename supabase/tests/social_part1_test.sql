@@ -1,7 +1,7 @@
 -- pgTAP tests for the social part 1 schema. Run with `supabase test db` (CI: .github/workflows/supabase.yml).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(32);
+select plan(34);
 
 -- Users: ana, bruno, carla, dora, eve (eve has no profile yet).
 insert into auth.users (id, email, aud, role) values
@@ -83,7 +83,9 @@ select lives_ok($$select block_user('33333333-3333-3333-3333-333333333333')$$, '
 select is_empty($$select 1 from friendships where '33333333-3333-3333-3333-333333333333' in (requester, addressee)$$,
   'block removes friendship');
 select is_empty($$select 1 from profiles where id = '33333333-3333-3333-3333-333333333333'$$, 'blocker cannot see blocked');
+select results_eq($$select username from my_blocked_profiles()$$, array['carla'], 'my_blocked_profiles lists who I blocked');
 select pg_temp.act_as('33333333-3333-3333-3333-333333333333');
+select is_empty($$select 1 from my_blocked_profiles()$$, 'my_blocked_profiles: blocked person sees nothing');
 select is_empty($$select 1 from profiles where id = '11111111-1111-1111-1111-111111111111'$$, 'blocked cannot see blocker');
 -- blocked_cannot_send_request
 select throws_ok($$select send_friend_request('11111111-1111-1111-1111-111111111111')$$,
