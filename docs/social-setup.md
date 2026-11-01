@@ -43,6 +43,9 @@ From the MyBooks folder on your PC (Node.js is already in `C:\Users\mcosta\devto
 
 ```powershell
 $env:Path = "C:\Users\mcosta\devtools\node-v18.20.8-win-x64;$env:Path"
+# The company network (Zscaler) inspects HTTPS; this makes the CLI trust the same certificates
+# as Windows and the browser. Without it: "failed to execute http request: Transport error".
+$env:NODE_USE_SYSTEM_CA = "1"
 npx supabase login                         # opens the browser once
 npx supabase link --project-ref abcdefgh   # the part of your Project URL before .supabase.co
 npx supabase db push                       # asks for the database password from step 1
