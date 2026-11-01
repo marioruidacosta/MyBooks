@@ -183,6 +183,14 @@ language sql stable security definer set search_path = public as $$
   limit least(greatest(search_profiles.max, 1), 50);
 $$;
 
+-- The people the caller blocked (their profiles are otherwise hidden from the caller by RLS).
+create function my_blocked_profiles() returns setof profiles
+language sql stable security definer set search_path = public as $$
+  select p.* from profiles p join blocks b on b.blocked = p.id
+  where b.blocker = auth.uid()
+  order by p.username;
+$$;
+
 -- Deletes the caller's auth user; profile, friendships and blocks cascade, reports keep reporter = null.
 -- The app removes the avatar through the Storage API first (direct storage.objects deletes are blocked).
 create function delete_my_account() returns void
@@ -195,9 +203,9 @@ end;
 $$;
 
 revoke all on function is_blocked_between(uuid, uuid), send_friend_request(uuid), respond_to_friend_request(uuid, boolean),
-  block_user(uuid), search_profiles(text, int), delete_my_account(), require_user() from public, anon;
+  block_user(uuid), search_profiles(text, int), my_blocked_profiles(), delete_my_account(), require_user() from public, anon;
 grant execute on function is_blocked_between(uuid, uuid), send_friend_request(uuid), respond_to_friend_request(uuid, boolean),
-  block_user(uuid), search_profiles(text, int), delete_my_account(), require_user() to authenticated;
+  block_user(uuid), search_profiles(text, int), my_blocked_profiles(), delete_my_account(), require_user() to authenticated;
 
 -- Avatars ----------------------------------------------------------------------------------
 
