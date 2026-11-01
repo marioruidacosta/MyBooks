@@ -27,6 +27,7 @@ class FakeSocial {
     var offline = false
     var validCode = "123456"
     var searchCalls = 0
+    var availabilityChecks = 0
 
     private val sessionFlow = MutableStateFlow<SessionState>(SessionState.SignedOut)
 
@@ -79,7 +80,7 @@ class FakeSocial {
     val profileService = object : ProfileService {
         override suspend fun myProfile(): Profile? { check(); return profiles[me()] }
         override suspend fun isUsernameAvailable(username: String): Boolean {
-            check(); return profiles.values.none { it.username == username }
+            check(); availabilityChecks++; return profiles.values.none { it.username == username }
         }
         override suspend fun createProfile(username: String, displayName: String): Profile {
             check()
