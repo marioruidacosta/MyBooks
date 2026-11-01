@@ -42,6 +42,7 @@ All the rules (who can see what, who can accept a request, blocking, account del
 From the MyBooks folder on your PC (Node.js is already in `C:\Users\mcosta\devtools`):
 
 ```powershell
+cd C:\Users\mcosta\GIT\MyBooks             # must run here: db push sends supabase\migrations from the current folder
 $env:Path = "C:\Users\mcosta\devtools\node-v18.20.8-win-x64;$env:Path"
 # The company network (Zscaler) inspects HTTPS; this makes the CLI trust the same certificates
 # as Windows and the browser. Without it: "failed to execute http request: Transport error".
