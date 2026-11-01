@@ -14,6 +14,7 @@ fun socialMessage(e: Throwable): String = when ((e as? SocialException)?.kind) {
     SocialException.Kind.OFFLINE -> "You're offline"
     SocialException.Kind.SECURE_CONNECTION ->
         "Couldn't connect securely to the community server. On a work network, try mobile data."
+    SocialException.Kind.TIMEOUT -> "The community server took too long to answer. Please try again."
     SocialException.Kind.INVALID_CODE -> "That code is wrong or has expired"
     SocialException.Kind.USERNAME_TAKEN -> "That username is taken"
     SocialException.Kind.NOT_AVAILABLE -> "This profile isn't available"

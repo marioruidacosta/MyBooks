@@ -19,6 +19,18 @@ class SocialErrorMappingTest {
     }
 
     @Test
+    fun timeoutIsTimeoutNotOffline() {
+        val e = mapSocialError(io.ktor.client.plugins.HttpRequestTimeoutException("https://x.supabase.co/auth/v1/otp", 10_000))
+        assertEquals(SocialException.Kind.TIMEOUT, e.kind)
+        assertEquals("The community server took too long to answer. Please try again.", socialMessage(e))
+    }
+
+    @Test
+    fun clientWaitsThirtySeconds() {
+        assertEquals(30_000L, com.mcosta.mybooks.social.supabase.SUPABASE_REQUEST_TIMEOUT.inWholeMilliseconds)
+    }
+
+    @Test
     fun unknownHostIsOffline() {
         assertEquals(SocialException.Kind.OFFLINE, mapSocialError(UnknownHostException("zwam.supabase.co")).kind)
     }

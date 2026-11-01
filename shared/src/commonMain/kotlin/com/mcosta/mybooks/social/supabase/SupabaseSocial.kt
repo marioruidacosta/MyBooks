@@ -35,6 +35,8 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.storage.storage
 import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.plugins.HttpRequestTimeoutException
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +58,14 @@ import kotlin.time.Clock
 fun createSocialServices(config: SocialConfig, engine: HttpClientEngine, settings: Settings? = null): SocialServices =
     SupabaseSocial(supabaseClient(config, engine, persistSession = true, settings)).services
 
+/**
+ * How long a Supabase call may take. Sending the sign-in email happens inside the request, and
+ * Supabase's built-in mailer can exceed the library's 10 s default.
+ */
+internal val SUPABASE_REQUEST_TIMEOUT = 30.seconds
+
+private fun isTimeout(e: Throwable) = generateSequence(e) { it.cause }.take(10).any { it is HttpRequestTimeoutException }
+
 internal fun supabaseClient(
     config: SocialConfig,
     engine: HttpClientEngine,
@@ -64,6 +74,7 @@ internal fun supabaseClient(
 ): SupabaseClient =
     createSupabaseClient(supabaseUrl = config.url.trim(), supabaseKey = config.anonKey.trim()) {
         httpEngine = engine
+        requestTimeout = SUPABASE_REQUEST_TIMEOUT
         install(Auth) {
             if (settings != null) {
                 sessionManager = SettingsSessionManager(settings)
@@ -85,6 +96,7 @@ internal fun supabaseClient(
 internal fun mapSocialError(e: Throwable): SocialException = when {
     e is SocialException -> e
     isTlsFailure(e) -> SocialException(SocialException.Kind.SECURE_CONNECTION, "secure connection failed", e)
+    isTimeout(e) -> SocialException(SocialException.Kind.TIMEOUT, "timed out", e)
     e is HttpRequestException || e is IOException -> SocialException(SocialException.Kind.OFFLINE, "offline", e)
     e is AuthRestException && (e.errorCode?.value == "otp_expired" || e.message.orEmpty().contains("expired", ignoreCase = true) ||
         e.message.orEmpty().contains("invalid", ignoreCase = true)) ->
