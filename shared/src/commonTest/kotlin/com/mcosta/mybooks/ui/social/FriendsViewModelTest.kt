@@ -33,6 +33,17 @@ class FriendsViewModelTest : MainDispatcherTest() {
     }
 
     @Test
+    fun signedInWithoutProfileMustFinishSetup() = runTest {
+        fake.signInAs("id-new")
+        val vm = vm()
+        assertTrue(vm.state.value.needsProfile)
+        assertFalse(vm.state.value.signedIn)
+        vm.setQuery("bruno")
+        advanceTimeBy(301)
+        assertEquals(0, fake.searchCalls)
+    }
+
+    @Test
     fun loadsFriendsAndRequests() = runTest {
         request(bruno, ana)
         request(ana, carla)

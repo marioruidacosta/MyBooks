@@ -33,7 +33,9 @@ All the rules (who can see what, who can accept a request, blocking, account del
    ```
 
    Do the same for the **Confirm signup** template, which is used the first time someone signs in.
-3. **Authentication → URL Configuration**: the Site URL can stay as it is; the app doesn't use links.
+3. **Authentication → Sign In / Providers → Email**: leave **Email OTP Length** at **6**. The app
+   expects exactly 6 digits, so another length makes sign-in impossible.
+4. **Authentication → URL Configuration**: the Site URL can stay as it is; the app doesn't use links.
 
 ## 3. Create the tables and rules
 

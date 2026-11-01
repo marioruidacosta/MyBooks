@@ -15,14 +15,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class SignInStep { EMAIL, CODE, USERNAME, DONE }
+/** LOADING: the session or profile isn't known yet (no form is shown; an error offers a retry). */
+enum class SignInStep { LOADING, EMAIL, CODE, USERNAME, DONE }
 
 data class SignInState(
-    val step: SignInStep = SignInStep.EMAIL,
+    val step: SignInStep = SignInStep.LOADING,
     val email: String = "",
     val code: String = "",
     val username: String = "",
@@ -45,11 +45,24 @@ class SignInViewModel(private val auth: AuthService, private val profiles: Profi
 
     init {
         viewModelScope.launch {
-            val session = auth.session.first { it !is SessionState.Loading }
-            if (session is SessionState.SignedIn) {
-                attempt { _state.update { it.copy(step = stepAfterSignIn()) } }
+            auth.session.collect { session ->
+                when (session) {
+                    SessionState.Loading -> _state.update { it.copy(step = SignInStep.LOADING) }
+                    SessionState.SignedOut -> _state.update { it.copy(step = SignInStep.EMAIL, code = "") }
+                    is SessionState.SignedIn -> resolveSignedIn()
+                }
             }
         }
+    }
+
+    /** Signed in: the username step if there's no profile yet, else done. Stays LOADING (with an error) on failure. */
+    private suspend fun resolveSignedIn() {
+        attempt { _state.update { it.copy(step = stepAfterSignIn()) } }
+    }
+
+    /** Retries finding out whether the signed-in user has a profile (after an offline failure). */
+    fun retry() {
+        viewModelScope.launch { resolveSignedIn() }
     }
 
     private suspend fun stepAfterSignIn() = if (profiles.myProfile() == null) SignInStep.USERNAME else SignInStep.DONE

@@ -49,6 +49,13 @@ fun SignInScreen(viewModel: SignInViewModel, onBack: () -> Unit, onDone: () -> U
         ) {
             if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             when (state.step) {
+                SignInStep.LOADING -> {
+                    if (state.error == null) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    } else {
+                        Button(onClick = viewModel::retry, enabled = !state.busy) { Text("Retry") }
+                    }
+                }
                 SignInStep.EMAIL -> {
                     Text(
                         "Join the community to find friends and follow what they read. Your library stays on this phone.",

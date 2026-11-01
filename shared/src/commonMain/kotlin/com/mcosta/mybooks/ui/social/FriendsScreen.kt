@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mcosta.mybooks.social.model.Person
 import com.mcosta.mybooks.social.model.Relationship
@@ -54,6 +55,12 @@ fun FriendsScreen(viewModel: FriendsViewModel, onBack: () -> Unit, onSignIn: () 
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var tab by rememberSaveable { mutableIntStateOf(0) }
+
+    // Come back from a profile (accept, remove, block…) to fresh lists.
+    LifecycleResumeEffect(Unit) {
+        viewModel.refresh()
+        onPauseOrDispose { }
+    }
 
     LaunchedEffect(state.message) {
         val message = state.message ?: return@LaunchedEffect
@@ -76,10 +83,11 @@ fun FriendsScreen(viewModel: FriendsViewModel, onBack: () -> Unit, onSignIn: () 
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Read together", style = MaterialTheme.typography.titleLarge)
                     Text(
-                        "Join the MyBooks community to find friends and follow what they read. Your library stays on this phone.",
+                        if (state.needsProfile) "Choose a username to finish setting up your community profile."
+                        else "Join the MyBooks community to find friends and follow what they read. Your library stays on this phone.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Button(onClick = onSignIn) { Text("Sign in or join") }
+                    Button(onClick = onSignIn) { Text(if (state.needsProfile) "Finish setting up" else "Sign in or join") }
                 }
                 return@Column
             }

@@ -17,7 +17,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class FriendsState(
+    /** Signed in with a profile: the friend features are available. */
     val signedIn: Boolean = false,
+    /** Signed in but no username chosen yet: the user must finish setting up first. */
+    val needsProfile: Boolean = false,
     val friends: List<Person> = emptyList(),
     val incoming: List<Person> = emptyList(),
     val outgoing: List<Person> = emptyList(),
@@ -38,9 +41,10 @@ class FriendsViewModel(private val services: SocialServices) : ViewModel() {
         viewModelScope.launch {
             services.auth.session.collect { session ->
                 when (session) {
-                    is SessionState.SignedIn -> {
-                        _state.update { it.copy(signedIn = true) }
-                        refresh()
+                    is SessionState.SignedIn -> launchAction {
+                        val hasProfile = services.profiles.myProfile() != null
+                        _state.update { it.copy(signedIn = hasProfile, needsProfile = !hasProfile) }
+                        if (hasProfile) reloadLists()
                     }
                     SessionState.SignedOut -> _state.value = FriendsState()
                     SessionState.Loading -> Unit
@@ -49,7 +53,7 @@ class FriendsViewModel(private val services: SocialServices) : ViewModel() {
         }
     }
 
-    fun refresh() = launchAction { reloadLists() }
+    fun refresh() = launchAction { if (_state.value.signedIn) reloadLists() }
 
     private suspend fun reloadLists() {
         val friends = services.friends.friends()
@@ -61,6 +65,7 @@ class FriendsViewModel(private val services: SocialServices) : ViewModel() {
     /** Searches 300 ms after typing stops, once the query has at least 2 characters. */
     fun setQuery(query: String) {
         _state.update { it.copy(query = query) }
+        if (!_state.value.signedIn) return
         searchJob?.cancel()
         if (query.trim().length < 2) {
             _state.update { it.copy(results = emptyList()) }

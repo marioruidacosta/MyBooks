@@ -126,6 +126,33 @@ class SignInViewModelTest : MainDispatcherTest() {
     }
 
     @Test
+    fun startsLoadingNotOnTheEmailForm() {
+        assertEquals(SignInStep.LOADING, SignInState().step)
+    }
+
+    @Test
+    fun offlineProfileCheckShowsRetryNotEmailForm() = runTest {
+        fake.signInAs("id-new")
+        fake.offline = true
+        val vm = vm()
+        assertEquals(SignInStep.LOADING, vm.state.value.step)
+        assertEquals("You're offline", vm.state.value.error)
+        fake.offline = false
+        vm.retry()
+        assertEquals(SignInStep.USERNAME, vm.state.value.step)
+    }
+
+    @Test
+    fun followsSessionChanges() = runTest {
+        val vm = vm()
+        assertEquals(SignInStep.EMAIL, vm.state.value.step)
+        fake.signInAs(fake.addUser("ana"))
+        assertEquals(SignInStep.DONE, vm.state.value.step)
+        fake.auth.signOut()
+        assertEquals(SignInStep.EMAIL, vm.state.value.step)
+    }
+
+    @Test
     fun offlineShowsOfflineMessage() = runTest {
         val vm = vm()
         fake.offline = true

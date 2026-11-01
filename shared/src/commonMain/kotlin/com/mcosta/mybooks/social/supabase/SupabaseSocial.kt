@@ -109,6 +109,9 @@ internal class SupabaseSocial(
             when (status) {
                 is SessionStatus.Authenticated -> status.session.user?.let { SessionState.SignedIn(it.id, it.email) } ?: SessionState.SignedOut
                 is SessionStatus.Initializing -> SessionState.Loading
+                // Expired token and no network: the session is kept and refreshed later, so stay signed in.
+                is SessionStatus.RefreshFailure ->
+                    client.auth.currentSessionOrNull()?.user?.let { SessionState.SignedIn(it.id, it.email) } ?: SessionState.SignedOut
                 else -> SessionState.SignedOut
             }
         }.stateIn(scope, SharingStarted.Eagerly, SessionState.Loading)
@@ -152,7 +155,7 @@ internal class SupabaseSocial(
             val old = client.from("profiles").select { filter { eq("id", me) } }.decodeSingle<ProfileRow>().avatarPath
             // A new file name each time, so image caches never show the old photo.
             val path = "$me/avatar-${Clock.System.now().toEpochMilliseconds()}.jpg"
-            client.storage.from("avatars").upload(path, jpeg) { upsert = true }
+            client.storage.from("avatars").upload(path, jpeg) { upsert = false }
             val updated = client.from("profiles").update({ set("avatar_path", path) }) {
                 select()
                 filter { eq("id", me) }

@@ -78,7 +78,13 @@ fun AccountScreen(viewModel: AccountViewModel, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            if (profile == null) return@Column
+            if (profile == null) {
+                if (!state.busy) {
+                    Text("Your profile couldn't be loaded.", style = MaterialTheme.typography.bodyMedium)
+                    OutlinedButton(onClick = viewModel::refresh) { Text("Retry") }
+                }
+                return@Column
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 PersonAvatar(profile.avatarUrl, size = 72.dp)
                 Column {
