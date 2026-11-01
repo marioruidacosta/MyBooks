@@ -1,7 +1,7 @@
 -- pgTAP tests for the social part 1 schema. Run with `supabase test db` (CI: .github/workflows/supabase.yml).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(49);
 
 -- Users: ana, bruno, carla, dora, eve (eve has no profile yet).
 insert into auth.users (id, email, aud, role) values
@@ -117,6 +117,59 @@ select ok(
   and not exists (select 1 from friendships where '44444444-4444-4444-4444-444444444444' in (requester, addressee))
   and exists (select 1 from reports where reported = '22222222-2222-2222-2222-222222222222' and reporter is null),
   'delete_my_account_cascades');
+-- reports_survive_reported_account_deletion (ana reported dora above)
+select ok(exists (select 1 from reports where reported is null and reported_username = 'dora' and reason = 'spam'),
+  'reports about a deleted account are kept, with the username');
+
+-- no_third_party_block_oracle (ana blocked carla; bruno must not be able to find out)
+set local role authenticated;
+select pg_temp.act_as('22222222-2222-2222-2222-222222222222');
+select throws_ok($$select is_blocked_between('11111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333')$$,
+  '42883', null, 'no third-party block oracle');
+
+-- direct_writes_are_refused (as bruno; ana sends him a new request first)
+select pg_temp.act_as('11111111-1111-1111-1111-111111111111');
+select send_friend_request('22222222-2222-2222-2222-222222222222');
+select pg_temp.act_as('22222222-2222-2222-2222-222222222222');
+select throws_ok($$insert into friendships (requester, addressee, status)
+  values ('22222222-2222-2222-2222-222222222222', '55555555-5555-5555-5555-555555555555', 'accepted')$$,
+  '42501', null, 'cannot insert friendship directly');
+select throws_ok($$update friendships set status = 'accepted' where addressee = '22222222-2222-2222-2222-222222222222'$$,
+  '42501', null, 'cannot accept by direct update');
+select throws_ok($$insert into blocks (blocker, blocked) values ('22222222-2222-2222-2222-222222222222', '55555555-5555-5555-5555-555555555555')$$,
+  '42501', null, 'cannot insert block directly');
+update profiles set display_name = 'pwned' where id = '55555555-5555-5555-5555-555555555555';
+select throws_ok($$insert into reports (reporter, reported, reason)
+  values ('55555555-5555-5555-5555-555555555555', '11111111-1111-1111-1111-111111111111', 'spam')$$,
+  '42501', null, 'cannot report as someone else');
+select throws_ok($$update profiles set avatar_path = '11111111-1111-1111-1111-111111111111/avatar-1.jpg'
+  where id = '22222222-2222-2222-2222-222222222222'$$, '23514', null, 'avatar_path must be in my own folder');
+select throws_ok($$update profiles set created_at = now() - interval '1 year' where id = '22222222-2222-2222-2222-222222222222'$$,
+  '42501', null, 'created_at is not writable');
+reset role;
+select is((select display_name from profiles where id = '55555555-5555-5555-5555-555555555555'), 'Eve',
+  'cannot update another profile');
+
+-- avatars: owner can see own objects (needed for upload upsert and delete), others can't list them; bucket limited
+insert into storage.objects (bucket_id, name, owner)
+  values ('avatars', '11111111-1111-1111-1111-111111111111/avatar-1.jpg', '11111111-1111-1111-1111-111111111111');
+set local role authenticated;
+select pg_temp.act_as('11111111-1111-1111-1111-111111111111');
+select isnt_empty($$select 1 from storage.objects where bucket_id = 'avatars' and name like '11111111-1111-1111-1111-111111111111/%'$$,
+  'owner can see own avatar objects');
+select pg_temp.act_as('22222222-2222-2222-2222-222222222222');
+select is_empty($$select 1 from storage.objects where bucket_id = 'avatars' and name like '11111111-1111-1111-1111-111111111111/%'$$,
+  'others cannot list my avatar objects');
+reset role;
+select results_eq($$select file_size_limit, allowed_mime_types from storage.buckets where id = 'avatars'$$,
+  $$values (1048576::bigint, array['image/jpeg'])$$, 'avatar bucket limited to 1 MB JPEG');
+
+-- anon has no access
+set local role anon;
+select throws_ok($$select 1 from profiles$$, '42501', null, 'anon cannot read profiles');
+select throws_ok($$select * from search_profiles('an')$$, '42501', null, 'anon cannot call search_profiles');
+select throws_ok($$select delete_my_account()$$, '42501', null, 'anon cannot call delete_my_account');
+reset role;
 
 select * from finish();
 rollback;
