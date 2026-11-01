@@ -5,7 +5,7 @@ name: iOS
 on:
   workflow_dispatch:
   push:
-    branches: [main, "feature/ios-*"]
+    branches: [main, "feature/ios-*", "feature/social-*"]
     tags: ["v*"]
 
 jobs:
@@ -18,6 +18,8 @@ jobs:
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       GOOGLE_BOOKS_API_KEY: ${{ secrets.GOOGLE_BOOKS_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -45,7 +47,11 @@ jobs:
           sips -s format png "$RUNNER_TEMP/icon.jpg" --out "$icon"
 
       - name: Secrets.xcconfig
-        run: printf 'GOOGLE_BOOKS_API_KEY = %s\nAPPLE_TEAM_ID = %s\n' "$GOOGLE_BOOKS_API_KEY" "$APPLE_TEAM_ID" > iosApp/Secrets.xcconfig
+        # In .xcconfig files "//" starts a comment, so the URL's "//" is written as "/$()/".
+        run: |
+          url="${SUPABASE_URL//\/\//\/\$()\/}"
+          printf 'GOOGLE_BOOKS_API_KEY = %s\nAPPLE_TEAM_ID = %s\nSUPABASE_URL = %s\nSUPABASE_ANON_KEY = %s\n' \
+            "$GOOGLE_BOOKS_API_KEY" "$APPLE_TEAM_ID" "$url" "$SUPABASE_ANON_KEY" > iosApp/Secrets.xcconfig
 
       - name: Generate Xcode project
         working-directory: iosApp

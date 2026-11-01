@@ -23,6 +23,9 @@ android {
 
         val googleBooksKey = localProperties.getProperty("GOOGLE_BOOKS_API_KEY", "").trim()
         buildConfigField("String", "GOOGLE_BOOKS_API_KEY", "\"$googleBooksKey\"")
+        for (name in listOf("SUPABASE_URL", "SUPABASE_ANON_KEY")) {
+            buildConfigField("String", name, "\"${localProperties.getProperty(name, "").trim()}\"")
+        }
     }
 
     buildTypes {

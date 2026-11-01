@@ -10,6 +10,9 @@ import com.mcosta.mybooks.data.lookup.GoogleBooksClient
 import com.mcosta.mybooks.data.lookup.LookupChain
 import com.mcosta.mybooks.data.lookup.OpenLibraryClient
 import com.mcosta.mybooks.data.lookup.lookupHttpClient
+import com.mcosta.mybooks.social.SocialConfig
+import com.mcosta.mybooks.social.SocialServices
+import com.mcosta.mybooks.social.supabase.createSocialServices
 import io.ktor.client.engine.HttpClientEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +25,7 @@ class AppContainer(
     val coverStore: CoverStore,
     googleBooksApiKey: String,
     userAgent: String,
+    socialConfig: SocialConfig = SocialConfig("", ""),
 ) {
     /** Outlives screens; used for writes that must finish after a screen closes. */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -40,4 +44,7 @@ class AppContainer(
         transactionRunner = { block -> database.useWriterConnection { it.immediateTransaction { block() } } },
         coverStore = coverStore,
     )
+
+    /** The community features, or null when Supabase isn't configured (then they're hidden). */
+    val social: SocialServices? = if (socialConfig.enabled) createSocialServices(socialConfig, httpEngine) else null
 }

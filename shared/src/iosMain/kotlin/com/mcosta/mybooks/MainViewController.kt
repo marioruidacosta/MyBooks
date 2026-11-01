@@ -8,6 +8,7 @@ import com.mcosta.mybooks.data.db.AppDatabase
 import com.mcosta.mybooks.data.db.createDatabase
 import com.mcosta.mybooks.platform.IosNativeServices
 import com.mcosta.mybooks.platform.iosPlatformServices
+import com.mcosta.mybooks.social.SocialConfig
 import com.mcosta.mybooks.ui.App
 import io.ktor.client.engine.darwin.Darwin
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -38,6 +39,7 @@ private val container: AppContainer by lazy {
         coverStore = CoverStore(FileSystem.SYSTEM, "$documents/covers".toPath()),
         googleBooksApiKey = infoString("GoogleBooksApiKey").trim(),
         userAgent = "MyBooks/${infoString("CFBundleShortVersionString")} (iOS; personal library app)",
+        socialConfig = SocialConfig(infoString("SupabaseUrl").trim(), infoString("SupabaseAnonKey").trim()),
     )
 }
 

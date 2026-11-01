@@ -24,6 +24,8 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         GoogleBooksApiKey: "$(GOOGLE_BOOKS_API_KEY)"
+        SupabaseUrl: "$(SUPABASE_URL)"
+        SupabaseAnonKey: "$(SUPABASE_ANON_KEY)"
         NSCameraUsageDescription: MyBooks uses the camera to scan book barcodes and photograph covers.
         ITSAppUsesNonExemptEncryption: false
         CADisableMinimumFrameDurationOnPhone: true

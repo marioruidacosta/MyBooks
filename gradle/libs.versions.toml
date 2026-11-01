@@ -27,6 +27,7 @@ jbMaterial3 = "1.9.0"
 jbMaterialIcons = "1.7.3"
 jbNavigation = "2.10.0"
 kotlinxDatetime = "0.7.1"
+supabase = "3.8.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -75,6 +76,10 @@ jb-compose-material3 = { module = "org.jetbrains.compose.material3:material3", v
 jb-compose-material-icons = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "jbMaterialIcons" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
 coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
+supabase-bom = { module = "io.github.jan-tennert.supabase:bom", version.ref = "supabase" }
+supabase-auth = { module = "io.github.jan-tennert.supabase:auth-kt" }
+supabase-postgrest = { module = "io.github.jan-tennert.supabase:postgrest-kt" }
+supabase-storage = { module = "io.github.jan-tennert.supabase:storage-kt" }
 
 [plugins]
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
