@@ -52,12 +52,12 @@ create table reports (
 -- Whether the caller and [other] are blocked either way. Scoped to the caller, so nobody can ask about
 -- other people's blocks.
 create function is_blocked_with(other uuid) returns boolean
-language sql stable security definer set search_path = public as $
+language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from blocks
     where (blocker = auth.uid() and blocked = other) or (blocker = other and blocked = auth.uid())
   );
-$;
+$$;
 
 create function require_user() returns uuid
 language plpgsql stable set search_path = public as $$
@@ -108,12 +108,12 @@ create policy reports_insert on reports for insert to authenticated
   with check (reporter = auth.uid() and reported <> auth.uid());
 
 create function set_reported_username() returns trigger
-language plpgsql security definer set search_path = public as $
+language plpgsql security definer set search_path = public as $$
 begin
   new.reported_username := (select username from profiles where id = new.reported);
   return new;
 end;
-$;
+$$;
 create trigger reports_reported_username before insert on reports
   for each row execute function set_reported_username();
 
