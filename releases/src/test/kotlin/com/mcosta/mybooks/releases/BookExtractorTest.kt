@@ -81,4 +81,19 @@ class BookExtractorTest {
         assertEquals("children", book("2291280").genre)
         assertEquals("history", book("2290698").genre)
     }
+
+    @Test
+    fun isbdPunctuationTrimmed() {
+        val r = record(
+            fields = arrayOf(
+                field("010", 'a' to "978-989-568-279-9"),
+                field("200", 'a' to "An unending bridge :", 'e' to "the Azorean Islands /"),
+                field("210", 'a' to "Ponta Delgada :", 'c' to "Letras Lavadas ;", 'd' to "2026"),
+            ),
+        )
+        val b = assertNotNull(BookExtractor.extract(r))
+        assertEquals("Letras Lavadas", b.publisher)
+        assertEquals("Ponta Delgada", b.place)
+        assertEquals("An unending bridge: the Azorean Islands", b.title)
+    }
 }

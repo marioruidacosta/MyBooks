@@ -6,7 +6,9 @@ object BookExtractor {
     private const val TRANSLATOR = "730"
     private val YEAR = Regex("""\d{4}""")
     private val SPACES = Regex("""\s+""")
-    private val CONTROLS = Regex("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F-\\u009F]")
+    /** ISBD separators left at the end of a subfield ("Lisboa :", "Letras Lavadas ;", "título /"). */
+    private val TRAILING_SEPARATOR = Regex("""\s*[;:/,=]+$""")
+    private val CONTROLS =Regex("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F-\\u009F]")
 
     /** The book, or null when the record isn't a new printed book with an ISBN (already-listed ids are the caller's job). */
     fun extract(record: MarcRecord): ReleaseBook? {
@@ -52,7 +54,7 @@ object BookExtractor {
      * punctuation), keeping "...".
      */
     private fun tidy(s: String): String {
-        val t = s.replace(CONTROLS, "").replace(SPACES, " ").trim()
+        val t = s.replace(CONTROLS, "").replace(SPACES, " ").trim().replace(TRAILING_SEPARATOR, "")
         return if (t.endsWith(".") && !t.endsWith("..")) t.dropLast(1).trimEnd() else t
     }
 }
