@@ -1,0 +1,88 @@
+package com.mcosta.mybooks.ui.releases
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.mcosta.mybooks.data.BookRepository
+import com.mcosta.mybooks.data.lookup.LookupResult
+import com.mcosta.mybooks.data.releases.ReleaseBook
+import com.mcosta.mybooks.data.releases.ReleasesRepository
+import com.mcosta.mybooks.data.releases.StoreLink
+import com.mcosta.mybooks.data.releases.storeLinks
+import com.mcosta.mybooks.domain.Book
+import com.mcosta.mybooks.domain.ReadingStatus
+import com.mcosta.mybooks.ui.social.LibraryShelf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+data class ReleaseBookState(
+    val book: ReleaseBook? = null,
+    val loaded: Boolean = false,
+    val coverUrl: String? = null,
+    val description: String? = null,
+    val inLibrary: Boolean = false,
+    val message: String? = null,
+    val stores: List<StoreLink> = emptyList(),
+)
+
+/** A new book: details, cover and description from the lookup sources, Add to my books and Where to buy. */
+class ReleaseBookViewModel(
+    private val releases: ReleasesRepository,
+    library: BookRepository,
+    private val month: String,
+    private val bookId: String,
+) : ViewModel() {
+    private val _state = MutableStateFlow(ReleaseBookState())
+    val state: StateFlow<ReleaseBookState> = _state.asStateFlow()
+    private val shelf = LibraryShelf(library)
+    private val lookupRepo = library
+
+    /** The cover found by the lookup sources (saved with the book); null until found. */
+    private var lookedUpCover: String? = null
+
+    init {
+        viewModelScope.launch {
+            val book = releases.book(month, bookId)
+            if (book == null) {
+                _state.update { it.copy(loaded = true) }
+                return@launch
+            }
+            _state.update {
+                it.copy(
+                    book = book,
+                    loaded = true,
+                    coverUrl = "https://covers.openlibrary.org/b/isbn/${book.isbn}-M.jpg?default=false",
+                    stores = storeLinks(book.isbn),
+                    inLibrary = shelf.contains(book.isbn, book.title, book.authors.joinToString(", ")),
+                )
+            }
+            val found = (lookupRepo.lookup(book.isbn) as? LookupResult.Found)?.book ?: return@launch
+            lookedUpCover = found.coverUrl
+            _state.update {
+                it.copy(coverUrl = found.coverUrl ?: it.coverUrl, description = found.description?.takeIf(String::isNotBlank))
+            }
+        }
+    }
+
+    fun addToLibrary(status: ReadingStatus) {
+        val book = _state.value.book ?: return
+        viewModelScope.launch {
+            val added = shelf.add(
+                Book(
+                    isbn = book.isbn, title = book.title, authors = book.authors.joinToString(", "),
+                    publisher = book.publisher, publishedYear = book.year, coverUrl = lookedUpCover, status = status,
+                )
+            )
+            _state.update {
+                it.copy(
+                    message = LibraryShelf.message(added, status) ?: it.message,
+                    inLibrary = it.inLibrary || added != LibraryShelf.Added.FAILED,
+                )
+            }
+        }
+    }
+
+    fun dismissMessage() = _state.update { it.copy(message = null) }
+}

@@ -1,0 +1,186 @@
+package com.mcosta.mybooks.ui.releases
+
+import com.mcosta.mybooks.MainDispatcherTest
+import com.mcosta.mybooks.data.BookRepository
+import com.mcosta.mybooks.data.FakeBookDao
+import com.mcosta.mybooks.data.lookup.BookLookupService
+import com.mcosta.mybooks.data.lookup.LookupResult
+import com.mcosta.mybooks.data.releases.ReleaseGenre
+import com.mcosta.mybooks.data.releases.ReleasesClient
+import com.mcosta.mybooks.data.releases.ReleasesRepository
+import com.mcosta.mybooks.domain.Book
+import com.mcosta.mybooks.domain.ReadingStatus
+import com.mcosta.mybooks.testing.fixture
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import kotlinx.io.IOException
+import okio.Path.Companion.toPath
+import okio.fakefilesystem.FakeFileSystem
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
+
+class ReleasesViewModelsTest : MainDispatcherTest() {
+    /** The mock HTTP engine answers on another thread: wait for loading to finish. */
+    private suspend fun ReleasesViewModel.loaded() = also { state.first { !it.loading } }
+    private suspend fun ReleaseGenreViewModel.loaded() = also { state.first { !it.loading } }
+
+    private var now = Instant.parse("2026-11-03T10:00:00Z")
+    private var offline = false
+    private var notPublished = false
+    private val files = mutableMapOf(
+        "index.json" to """{"version":1,"updated":"x","months":[
+            {"month":"2026-11","complete":false,"total":2,"genres":{"novel":1,"poetry":1}},
+            {"month":"2026-10","complete":true,"total":8,"genres":{"children":1,"crime":1,"history":1,"novel":2,"poetry":1,"scifi":1,"theatre":1}}]}""",
+        "2026-10.json" to fixture("releases_2026-10.json"),
+    )
+    private val engine = MockEngine { request ->
+        if (offline) throw IOException("no network")
+        val body = files[request.url.encodedPath.substringAfterLast('/')]
+        if (notPublished || body == null) respond("", HttpStatusCode.NotFound)
+        else respond(body, HttpStatusCode.OK, headersOf("Content-Type", "application/json"))
+    }
+    private val releases = ReleasesRepository(
+        ReleasesClient(HttpClient(engine) { expectSuccess = false }, "https://pages.test/releases/"),
+        FakeFileSystem(), "/releases".toPath(), { now }, io = Dispatchers.Unconfined,
+    )
+    private var lookup: LookupResult = LookupResult.NotFound
+    private val dao = FakeBookDao()
+    private val library = BookRepository(dao, object : BookLookupService {
+        override suspend fun lookup(isbn: String) = lookup
+    })
+
+    @Test
+    fun loadsMonthsAndSelectsNewest() = runTest {
+        val vm = ReleasesViewModel(releases).loaded()
+        val s = vm.state.value
+        assertEquals(listOf("2026-11", "2026-10"), s.months.map { it.month })
+        assertEquals("2026-11", s.selected?.month)
+        assertNull(s.error)
+        assertNull(s.savedAt)
+    }
+
+    @Test
+    fun selectingMonthShowsItsGenres() = runTest {
+        val vm = ReleasesViewModel(releases).loaded()
+        vm.select("2026-10")
+        assertEquals(
+            listOf(ReleaseGenre.CRIME, ReleaseGenre.SCIFI, ReleaseGenre.NOVEL, ReleaseGenre.POETRY, ReleaseGenre.THEATRE, ReleaseGenre.CHILDREN, ReleaseGenre.HISTORY),
+            vm.state.value.selected?.genres?.map { it.first },
+        )
+    }
+
+    @Test
+    fun offlineShowsSavedNote() = runTest {
+        ReleasesViewModel(releases).loaded()
+        now += 7.hours
+        offline = true
+        val vm = ReleasesViewModel(releases).loaded()
+        assertEquals(Instant.parse("2026-11-03T10:00:00Z"), vm.state.value.savedAt)
+        assertEquals(2, vm.state.value.months.size)
+    }
+
+    @Test
+    fun notPublishedState() = runTest {
+        notPublished = true
+        val vm = ReleasesViewModel(releases).loaded()
+        assertTrue(vm.state.value.notPublished)
+        assertNull(vm.state.value.error)
+    }
+
+    @Test
+    fun errorThenRetry() = runTest {
+        offline = true
+        val vm = ReleasesViewModel(releases).loaded()
+        assertEquals("Couldn't load the new releases", vm.state.value.error)
+        offline = false
+        vm.retry()
+        vm.loaded()
+        assertNull(vm.state.value.error)
+        assertEquals(2, vm.state.value.months.size)
+    }
+
+    @Test
+    fun uncachedMonthOfflineShowsError() = runTest {
+        ReleasesViewModel(releases).loaded()            // index saved; October never opened
+        offline = true
+        val vm = ReleaseGenreViewModel(releases, "2026-10", ReleaseGenre.NOVEL).loaded()
+        assertEquals("Couldn't load the new releases", vm.state.value.error)
+        offline = false
+        vm.retry()
+        vm.loaded()
+        assertNull(vm.state.value.error)
+        assertEquals(2, vm.state.value.books.size)
+    }
+
+    @Test
+    fun genreListsOnlyThatGenreSorted() = runTest {
+        val vm = ReleaseGenreViewModel(releases, "2026-10", ReleaseGenre.NOVEL).loaded()
+        assertEquals(listOf("A casa de cal", "A frágil luz do mundo"), vm.state.value.books.map { it.title })
+    }
+
+    @Test
+    fun bookShowsStoresAndLookupDescription() = runTest {
+        lookup = LookupResult.Found(Book(title = "A casa de cal", description = "Um romance.", coverUrl = "https://books.google.com/c.jpg"))
+        releases.books("2026-10")
+        val vm = ReleaseBookViewModel(releases, library, "2026-10", "2293200")
+        val s = vm.state.value
+        assertEquals("A casa de cal", s.book?.title)
+        assertEquals("Um romance.", s.description)
+        assertEquals("https://books.google.com/c.jpg", s.coverUrl)
+        assertEquals(listOf("Bertrand", "Almedina", "Wook", "Fnac"), s.stores.map { it.name })
+        assertEquals("https://www.wook.pt/pesquisa?keyword=9789895682799", s.stores[2].url)
+    }
+
+    @Test
+    fun coverFallsBackToOpenLibrary() = runTest {
+        releases.books("2026-10")
+        val vm = ReleaseBookViewModel(releases, library, "2026-10", "2293200")
+        assertEquals("https://covers.openlibrary.org/b/isbn/9789895682799-M.jpg?default=false", vm.state.value.coverUrl)
+    }
+
+    @Test
+    fun bookWithoutTranslatorsHasNone() = runTest {
+        releases.books("2026-10")
+        val vm = ReleaseBookViewModel(releases, library, "2026-10", "2293200")
+        assertEquals(emptyList(), vm.state.value.book?.translators)
+    }
+
+    @Test
+    fun addToLibrarySavesToBuy() = runTest {
+        lookup = LookupResult.Found(Book(title = "A casa de cal", coverUrl = "https://books.google.com/c.jpg"))
+        releases.books("2026-10")
+        val vm = ReleaseBookViewModel(releases, library, "2026-10", "2293200")
+        assertFalse(vm.state.value.inLibrary)
+        vm.addToLibrary(ReadingStatus.WISHLIST)
+        val saved = assertNotNull(dao.getAll().singleOrNull())
+        assertEquals("A casa de cal", saved.title)
+        assertEquals("9789895682799", saved.isbn)
+        assertEquals("Thomas Bernhard", saved.authors)
+        assertEquals("Documenta", saved.publisher)
+        assertEquals(2026, saved.publishedYear)
+        assertEquals("https://books.google.com/c.jpg", saved.coverUrl)
+        assertEquals(ReadingStatus.WISHLIST, saved.status)
+        assertEquals("Added to To buy", vm.state.value.message)
+        assertTrue(vm.state.value.inLibrary)
+    }
+
+    @Test
+    fun alreadyInLibraryDetectedByIsbn() = runTest {
+        library.save(Book(title = "A casa de cal", isbn = "9789895682799"))
+        releases.books("2026-10")
+        val vm = ReleaseBookViewModel(releases, library, "2026-10", "2293200")
+        assertTrue(vm.state.value.inLibrary)
+    }
+}

@@ -11,21 +11,24 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-/** "Add to my books" for a feed entry's book, shared by the Activity and Profile screens. */
+/** "Add to my books" for a book seen elsewhere (the feed, a profile, New in Portugal). */
 internal class LibraryShelf(private val repository: BookRepository) {
     enum class Added { ADDED, ALREADY_THERE, FAILED }
 
     /** Matched by ISBN, or by title and authors when there is none. */
-    suspend fun contains(book: FeedBook): Boolean =
-        (if (book.isbn != null) repository.findByIsbn(book.isbn) else repository.findByTitleAndAuthors(book.title, book.authors)) != null
+    suspend fun contains(isbn: String?, title: String, authors: String): Boolean =
+        (if (isbn != null) repository.findByIsbn(isbn) else repository.findByTitleAndAuthors(title, authors)) != null
 
-    suspend fun add(book: FeedBook, status: ReadingStatus): Added {
-        if (contains(book)) return Added.ALREADY_THERE
-        val result = repository.save(
-            Book(isbn = book.isbn, title = book.title, authors = book.authors, coverUrl = book.coverUrl, status = status)
-        )
-        return if (result is SaveResult.Saved) Added.ADDED else Added.FAILED
+    suspend fun contains(book: FeedBook): Boolean = contains(book.isbn, book.title, book.authors)
+
+    /** Saves [book] (its status included) unless the library already has it. */
+    suspend fun add(book: Book): Added {
+        if (contains(book.isbn, book.title, book.authors)) return Added.ALREADY_THERE
+        return if (repository.save(book) is SaveResult.Saved) Added.ADDED else Added.FAILED
     }
+
+    suspend fun add(book: FeedBook, status: ReadingStatus): Added =
+        add(Book(isbn = book.isbn, title = book.title, authors = book.authors, coverUrl = book.coverUrl, status = status))
 
     companion object {
         fun message(added: Added, status: ReadingStatus): String? = when (added) {
