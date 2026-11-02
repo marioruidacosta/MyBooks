@@ -57,6 +57,10 @@ class BookRepository(
     suspend fun findByIsbn(isbn: String): Book? =
         Isbn.normalize(isbn)?.let { dao.findByIsbn(it)?.toBook() }
 
+    /** A book without ISBN, matched on title and authors (ignoring case). */
+    suspend fun findByTitleAndAuthors(title: String, authors: String): Book? =
+        dao.findWithoutIsbn(title.trim(), authors.trim())?.toBook()
+
     suspend fun lookup(isbn: String): LookupResult = lookupService.lookup(isbn)
 
     suspend fun save(book: Book): SaveResult {

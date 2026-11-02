@@ -51,10 +51,17 @@ import com.mcosta.mybooks.social.model.Relationship
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FriendsScreen(viewModel: FriendsViewModel, onBack: () -> Unit, onSignIn: () -> Unit, onOpenPerson: (String) -> Unit) {
+fun FriendsScreen(
+    viewModel: FriendsViewModel,
+    onBack: () -> Unit,
+    onSignIn: () -> Unit,
+    onOpenPerson: (String) -> Unit,
+    /** 0 Friends, 1 Requests, 2 Find people. */
+    initialTab: Int = 0,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(initialTab) }
 
     // Come back from a profile (accept, remove, block…) to fresh lists.
     LifecycleResumeEffect(Unit) {
@@ -168,7 +175,7 @@ private fun SectionTitle(text: String) =
     Text(text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp))
 
 @Composable
-private fun EmptyText(text: String) = Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+internal fun EmptyText(text: String) = Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
     Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 

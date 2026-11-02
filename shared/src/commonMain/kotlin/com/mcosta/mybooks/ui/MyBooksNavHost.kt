@@ -14,6 +14,8 @@ import com.mcosta.mybooks.AppContainer
 import com.mcosta.mybooks.platform.ScanOutcome
 import com.mcosta.mybooks.social.model.SessionState
 import com.mcosta.mybooks.ui.social.AccountRoute
+import com.mcosta.mybooks.ui.social.ActivityScreen
+import com.mcosta.mybooks.ui.social.ActivityViewModel
 import com.mcosta.mybooks.ui.social.FriendsScreen
 import com.mcosta.mybooks.ui.social.FriendsViewModel
 import com.mcosta.mybooks.ui.social.ProfileScreen
@@ -35,7 +37,8 @@ object Routes {
     const val EDIT = "edit/{id}"
     const val BOOK = "book/{id}"
     const val SETTINGS = "settings"
-    const val FRIENDS = "friends"
+    const val FRIENDS = "friends?tab={tab}"
+    const val ACTIVITY = "activity"
     const val PROFILE = "profile/{id}"
     const val ACCOUNT = "account"
 
@@ -43,6 +46,7 @@ object Routes {
     fun edit(id: Long) = "edit/$id"
     fun book(id: Long) = "book/$id"
     fun profile(userId: String) = "profile/$userId"
+    fun friends(tab: Int = 0) = "friends?tab=$tab"
 }
 
 @Composable
@@ -75,7 +79,8 @@ fun MyBooksNavHost(container: AppContainer) {
                     }
                 },
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
-                onOpenFriends = social?.let { { nav.navigate(Routes.FRIENDS) } },
+                onOpenFriends = social?.let { { nav.navigate(Routes.friends()) } },
+                onOpenActivity = social?.let { { nav.navigate(Routes.ACTIVITY) } },
             )
         }
         composable(
@@ -112,11 +117,21 @@ fun MyBooksNavHost(container: AppContainer) {
             )
         }
         if (social != null) {
-            composable(Routes.FRIENDS) {
+            composable(Routes.FRIENDS, arguments = listOf(navArgument("tab") { type = NavType.IntType; defaultValue = 0 })) { entry ->
                 FriendsScreen(
                     viewModel = viewModel { FriendsViewModel(social) },
                     onBack = { nav.popBackStack() },
                     onSignIn = { nav.navigate(Routes.ACCOUNT) },
+                    onOpenPerson = { nav.navigate(Routes.profile(it)) },
+                    initialTab = entry.savedStateHandle.get<Int>("tab") ?: 0,
+                )
+            }
+            composable(Routes.ACTIVITY) {
+                ActivityScreen(
+                    viewModel = viewModel { ActivityViewModel(social, container.repository) },
+                    onBack = { nav.popBackStack() },
+                    onJoin = { nav.navigate(Routes.ACCOUNT) },
+                    onFindPeople = { nav.navigate(Routes.friends(tab = 2)) },
                     onOpenPerson = { nav.navigate(Routes.profile(it)) },
                 )
             }

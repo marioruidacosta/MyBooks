@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
@@ -75,6 +76,8 @@ fun LibraryScreen(
     onOpenSettings: () -> Unit,
     /** Null when the community features aren't configured: no Friends icon. */
     onOpenFriends: (() -> Unit)? = null,
+    /** Null when the community features aren't configured: no Activity icon. */
+    onOpenActivity: (() -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf(state.query) }
@@ -85,6 +88,9 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text("MyBooks") },
                 actions = {
+                    if (onOpenActivity != null) {
+                        IconButton(onClick = onOpenActivity) { Icon(Icons.Filled.DynamicFeed, "Activity") }
+                    }
                     if (onOpenFriends != null) {
                         IconButton(onClick = onOpenFriends) { Icon(Icons.Filled.Group, "Friends") }
                     }
