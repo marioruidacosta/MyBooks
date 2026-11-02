@@ -24,7 +24,9 @@ After that it runs by itself every night at 03:00 UTC.
 
 - **A red Releases job run:** the Library was unavailable, or its data changed shape. Nothing published is lost,
   and the next run catches up from the last good day. The run's annotations show the error without signing in.
-- **To rebuild from scratch:** delete the `releases-data` branch and run the job by hand again.
+- **To rebuild from scratch** (for example after the job learns to publish a new field): Actions → Releases job →
+  Run workflow → tick **Rebuild all seven months from scratch**. The old lists are replaced in a normal commit; the
+  `releases-data` branch keeps its history.
 
 ## Running it on this PC
 
