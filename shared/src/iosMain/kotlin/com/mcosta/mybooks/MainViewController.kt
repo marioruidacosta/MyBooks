@@ -35,7 +35,8 @@ private val container: AppContainer by lazy {
     val documents = documentsPath()
     AppContainer(
         database = createDatabase(Room.databaseBuilder<AppDatabase>(name = "$documents/mybooks.db"), BundledSQLiteDriver()),
-        httpEngine = Darwin.create(),
+        // Sending the sign-in email can take longer than the default wait.
+        httpEngine = Darwin.create { configureSession { timeoutIntervalForRequest = 30.0 } },
         coverStore = CoverStore(FileSystem.SYSTEM, "$documents/covers".toPath()),
         googleBooksApiKey = infoString("GoogleBooksApiKey").trim(),
         userAgent = "MyBooks/${infoString("CFBundleShortVersionString")} (iOS; personal library app)",
