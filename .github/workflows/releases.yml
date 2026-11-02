@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
+    inputs:
+      rebuild:
+        description: "Rebuild all seven months from scratch (a normal commit; the data branch keeps its history)"
+        type: boolean
+        default: false
   push:
     paths: ["releases/**", ".github/workflows/releases.yml"]
 
@@ -71,6 +76,9 @@ jobs:
             echo "::error::Couldn't check the releases-data branch (git ls-remote exit $rc)"
             exit "$rc"
           fi
+      - name: Start afresh (rebuild)
+        if: inputs.rebuild
+        run: rm -rf data/releases data/state.json data/seen.txt
       - name: Harvest
         run: bash .github/scripts/annotate.sh ./gradlew :releases:run --args="--data-dir $GITHUB_WORKSPACE/data"
       - name: Save the data
