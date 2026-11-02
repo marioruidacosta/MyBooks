@@ -54,12 +54,15 @@ translating the UI to Portuguese.
 A record is listed when **all** of the following hold:
 
 - leader positions 6–7 are `am` (printed monograph)
-- it has an ISBN in `010$a`, normalised to 13 digits with the app's existing `Isbn.normalize`; records
-  whose ISBN doesn't normalise are skipped
+- it has an ISBN in `010$a`, normalised to 13 digits (hyphens and spaces removed; ISBN-10 converted to
+  ISBN-13 with a recomputed check digit; an invalid check digit is skipped). The job has its own
+  normaliser, tested to agree with the app's `Isbn.normalize` on the fixture ISBNs.
 - its publication year (first 4-digit number in `210$d`) is the month's year or the year before
 - its record id (`001`) is not in `seen.txt` (books already listed in any month)
 
-Its **month** is the `YYYY-MM` of the OAI `<datestamp>` at which the job first sees it.
+Its **month** is the `YYYY-MM` of the OAI `<datestamp>` at which the job first sees it. During the
+first-run backfill a datestamp is the record's latest change, so a book edited after it first appeared is
+listed in the later month; the nightly runs see books as they appear.
 
 ### Fields kept per book
 
@@ -118,8 +121,8 @@ digit order, then `other` and `unclassified`.
 
 ## Published files
 
-Published on the `releases-data` branch, served by GitHub Pages at
-`https://marioruidacosta.github.io/MyBooks/releases/`.
+Kept on the `releases-data` branch (the job's history and state) and deployed to GitHub Pages by the
+workflow (Pages source: **GitHub Actions**), served at `https://marioruidacosta.github.io/MyBooks/releases/`.
 
 `releases/index.json`:
 
@@ -177,7 +180,9 @@ Job state, also on `releases-data` (not read by the app):
   - triggers: `schedule: cron "0 3 * * *"`, `workflow_dispatch`, and pushes touching `releases/**`
     (tests only)
   - steps: run `./gradlew :releases:test`; on schedule or dispatch, check out `releases-data` into
-    `data/`, run the job, then commit and push `data/` if it changed (`permissions: contents: write`)
+    `data/` (created as an orphan branch if missing), run the job, commit and push `data/` if it changed,
+    then deploy `data/` with `actions/upload-pages-artifact` and `actions/deploy-pages`
+    (`permissions: contents: write, pages: write, id-token: write`)
 
 ## The app
 
@@ -252,6 +257,6 @@ Job state, also on `releases-data` (not read by the app):
 
 ## User setup (once)
 
-1. Create the `releases-data` branch (the first workflow run does this if it's missing).
-2. GitHub → Settings → Pages: deploy from branch `releases-data`, folder `/ (root)`.
+1. GitHub → Settings → Pages → Build and deployment → Source: **GitHub Actions**.
+2. (The `releases-data` branch is created by the first run.)
 3. Run **Releases job** once by hand (Actions → Releases job → Run workflow) to backfill six months.
