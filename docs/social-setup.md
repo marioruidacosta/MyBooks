@@ -49,10 +49,11 @@ $env:Path = "C:\Users\mcosta\devtools\node-v18.20.8-win-x64;$env:Path"
 $env:NODE_USE_SYSTEM_CA = "1"
 npx supabase login                         # opens the browser once
 npx supabase link --project-ref abcdefgh   # the part of your Project URL before .supabase.co
-npx supabase db push                       # asks for the database password from step 1
+npx supabase db push --remote              # asks for the database password from step 1
 ```
 
-`db push` applies everything in `supabase/migrations/`. Run it again whenever a new migration is
+`db push` applies everything in `supabase/migrations/`. Since Supabase CLI v3, `db push` targets the local
+database unless you add `--remote`; without it you get `connect ECONNREFUSED 127.0.0.1:54322`. Run it again whenever a new migration is
 added.
 
 ### 3b. Activity feed (social part 2)
@@ -64,7 +65,7 @@ likes). Apply it once, the same way:
 cd C:\Users\mcosta\GIT\MyBooks
 $env:Path = "C:\Users\mcosta\devtools\node-v18.20.8-win-x64;$env:Path"
 $env:NODE_USE_SYSTEM_CA = "1"
-npx supabase db push                       # lists 2026110200_social_part2.sql; answer Y
+npx supabase db push --remote              # lists 2026110200_social_part2.sql; answer Y
 ```
 
 Until it's applied, the Activity screen shows an error and book changes simply wait on the phone;
