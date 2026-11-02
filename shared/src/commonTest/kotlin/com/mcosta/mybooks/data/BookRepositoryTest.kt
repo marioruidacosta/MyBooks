@@ -50,6 +50,20 @@ class BookRepositoryTest {
     }
 
     @Test
+    fun reviewOver2000Rejected() = runTest {
+        assertEquals(SaveResult.InvalidReview, repo.save(Book(title = "Dune", review = "x".repeat(2001))))
+        val id = saveOk(Book(title = "Dune", review = "x".repeat(2000)))
+        assertFailsWith<IllegalArgumentException> { repo.setReview(id, "x".repeat(2001)) }
+    }
+
+    @Test
+    fun setReviewStoresText() = runTest {
+        val id = saveOk(Book(title = "Dune"))
+        repo.setReview(id, "Worth it")
+        assertEquals("Worth it", get(id).review)
+    }
+
+    @Test
     fun ratingSixRejected() = runTest {
         assertEquals(SaveResult.InvalidRating, repo.save(Book(title = "Dune", rating = 6)))
         assertEquals(SaveResult.InvalidRating, repo.save(Book(title = "Dune", rating = 0)))

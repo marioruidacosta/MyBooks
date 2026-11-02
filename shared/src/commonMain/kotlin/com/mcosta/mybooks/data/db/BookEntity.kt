@@ -1,5 +1,6 @@
 package com.mcosta.mybooks.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -28,13 +29,15 @@ data class BookEntity(
     val dateStarted: Long? = null,
     val currentPage: Int? = null,
     val progressPercent: Int? = null,
+    @ColumnInfo(defaultValue = "")
+    val review: String = "",
 )
 
 fun BookEntity.toBook() = Book(
     id = id, isbn = isbn, title = title, authors = authors, publisher = publisher,
     publishedYear = publishedYear, pageCount = pageCount, coverUrl = coverUrl, description = description,
     status = status, rating = rating, notes = notes, dateAdded = dateAdded, dateRead = dateRead,
-    dateStarted = dateStarted, currentPage = currentPage, progressPercent = progressPercent,
+    dateStarted = dateStarted, currentPage = currentPage, progressPercent = progressPercent, review = review,
 )
 
 fun Book.toEntity() = BookEntity(
@@ -43,5 +46,5 @@ fun Book.toEntity() = BookEntity(
     status = status, rating = rating, notes = notes, dateAdded = dateAdded, dateRead = dateRead,
     // Newline separator stops a query from matching across the title/author boundary.
     searchText = searchKey("$title\n$authors"),
-    dateStarted = dateStarted, currentPage = currentPage, progressPercent = progressPercent,
+    dateStarted = dateStarted, currentPage = currentPage, progressPercent = progressPercent, review = review,
 )

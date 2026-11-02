@@ -117,6 +117,7 @@ class EditBookViewModel(
                 SaveResult.DuplicateIsbn -> "This ISBN is already in your library"
                 SaveResult.InvalidIsbn -> "Invalid ISBN"
                 SaveResult.InvalidRating -> "Rating must be 1–5"
+                SaveResult.InvalidReview -> "Review is too long (2000 characters max)"
             }
             _state.update { it.copy(error = error, saving = false) }
         }

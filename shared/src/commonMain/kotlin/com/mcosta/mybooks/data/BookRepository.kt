@@ -23,7 +23,11 @@ sealed interface SaveResult {
     data object InvalidTitle : SaveResult
     data object InvalidRating : SaveResult
     data object InvalidIsbn : SaveResult
+    data object InvalidReview : SaveResult
 }
+
+/** The longest review the community server accepts. */
+const val MAX_REVIEW_LENGTH = 2000
 
 data class ImportSummary(val added: Int, val updated: Int, val failed: Int)
 
@@ -80,6 +84,12 @@ class BookRepository(
     }
 
     suspend fun setNotes(id: Long, notes: String) = modify(id) { it.copy(notes = notes) }
+
+    /** The public review (at most [MAX_REVIEW_LENGTH] characters). */
+    suspend fun setReview(id: Long, review: String) {
+        require(review.length <= MAX_REVIEW_LENGTH) { "review must be at most $MAX_REVIEW_LENGTH characters" }
+        modify(id) { it.copy(review = review) }
+    }
 
     /** Progress by page; the percentage follows from the page count when known (capped at 100). */
     suspend fun setProgressPages(id: Long, page: Int) {
@@ -206,6 +216,7 @@ class BookRepository(
         val title = book.title.trim()
         if (title.isEmpty()) return Validation.Invalid(SaveResult.InvalidTitle)
         if (book.rating != null && book.rating !in 1..5) return Validation.Invalid(SaveResult.InvalidRating)
+        if (book.review.length > MAX_REVIEW_LENGTH) return Validation.Invalid(SaveResult.InvalidReview)
         val isbn = book.isbn?.takeIf { it.isNotBlank() }?.let {
             Isbn.normalize(it) ?: return Validation.Invalid(SaveResult.InvalidIsbn)
         }

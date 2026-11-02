@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -79,5 +80,40 @@ class MigrationTest {
         val cossery = db.bookDao().findByIsbn("9789726084884")!!
         db.close()
         assertEquals("https://covers.openlibrary.org/b/isbn/9789726084884-L.jpg?default=false", cossery.coverUrl)
+    }
+
+    /** Version 2 is what phones run before social part 2: books gain an empty review, share_state starts empty. */
+    @Test
+    fun upgradeFrom2KeepsBooksAndAddsReview() = runTest {
+        context.deleteDatabase(name)
+        val v2 = SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(name), null)
+        v2.execSQL(
+            "CREATE TABLE IF NOT EXISTS `books` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `isbn` TEXT, " +
+                "`title` TEXT NOT NULL, `authors` TEXT NOT NULL, `publisher` TEXT, `publishedYear` INTEGER, " +
+                "`pageCount` INTEGER, `coverUrl` TEXT, `description` TEXT, `status` TEXT NOT NULL, `rating` INTEGER, " +
+                "`notes` TEXT NOT NULL, `dateAdded` INTEGER NOT NULL, `dateRead` INTEGER, `searchText` TEXT NOT NULL, " +
+                "`dateStarted` INTEGER, `currentPage` INTEGER, `progressPercent` INTEGER)"
+        )
+        v2.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_books_isbn` ON `books` (`isbn`)")
+        v2.execSQL(
+            "INSERT INTO books (isbn, title, authors, status, rating, notes, dateAdded, searchText, dateStarted, progressPercent) " +
+                "VALUES ('9780441013593', 'Dune', 'Frank Herbert', 'READING', 5, 'mine', 20, 'dune\nfrank herbert', 15, 40)"
+        )
+        v2.version = 2
+        v2.close()
+
+        val db = createAndroidDatabase(context, name)
+        val dune = db.bookDao().findByIsbn("9780441013593")!!.toBook()
+        assertEquals("", dune.review)
+        assertEquals(40, dune.progressPercent)
+        assertEquals("mine", dune.notes)
+        assertTrue(db.shareStateDao().all().isEmpty())
+        val row = ShareStateEntity(
+            bookId = dune.id, shareId = "s1", owner = "me", hasBefore = true, beforeStatus = ReadingStatus.READ,
+            beforeRating = 5, beforeProgress = null, beforeReview = "", pending = true, excluded = false, deleted = false,
+        )
+        db.shareStateDao().upsert(row)
+        assertEquals(row, db.shareStateDao().get(dune.id))
+        db.close()
     }
 }

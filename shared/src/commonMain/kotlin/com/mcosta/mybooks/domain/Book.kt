@@ -30,4 +30,6 @@ data class Book(
     val currentPage: Int? = null,
     /** Reading progress 0..100; computed from [currentPage] when the page count is known. */
     val progressPercent: Int? = null,
+    /** Public review, shared with the community when sharing is on (Notes stay private). */
+    val review: String = "",
 )

@@ -46,6 +46,21 @@ class BackupSerializerTest {
     }
 
     @Test
+    fun backupRoundTripKeepsReviewAndShareInfo() {
+        val reviewed = full.copy(review = "A classic")
+        val other = full.copy(id = 10, isbn = null, title = "Emma")
+        val json = BackupSerializer.encode(listOf(reviewed, other), exportedAt = 1, shares = mapOf(9L to BackupShare("share-9", excluded = true)))
+        val decoded = BackupSerializer.decodeWithShares(json)
+        assertEquals(listOf(reviewed.copy(id = 0) to BackupShare("share-9", true), other.copy(id = 0) to null), decoded)
+    }
+
+    @Test
+    fun oldBackupWithoutNewFieldsStillDecodes() {
+        val json = """{"version":1,"exportedAt":0,"books":[{"title":"Emma","status":"READ"}]}"""
+        assertEquals(listOf(Book(title = "Emma", status = ReadingStatus.READ) to null), BackupSerializer.decodeWithShares(json))
+    }
+
+    @Test
     fun unknownStatusRejected() {
         assertFailsWith<BackupFormatException> { BackupSerializer.decode("""{"version":1,"exportedAt":0,"books":[{"title":"X","status":"LOST"}]}""") }
     }
