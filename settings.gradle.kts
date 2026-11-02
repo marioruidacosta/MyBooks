@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "MyBooks"
-include(":androidApp", ":shared")
+include(":androidApp", ":shared", ":releases")
