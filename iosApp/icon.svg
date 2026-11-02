@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- iOS app icon, converted from the Android adaptive icon (androidApp/.../ic_launcher_foreground.xml).
+     Rendered to AppIcon-1024.png in CI. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 72 72" width="1024" height="1024">
+  <rect x="0" y="0" width="108" height="108" fill="#6D4C41"/>
+  <path fill="#FFFFFF" d="M54,40 C47,35 38,34 30,36 L30,72 C38,70 47,71 54,76 Z"/>
+  <path fill="#F3E9E2" d="M54,40 C61,35 70,34 78,36 L78,72 C70,70 61,71 54,76 Z"/>
+  <path fill="none" stroke="#BCAAA4" stroke-width="1.6" stroke-linecap="round"
+        d="M35,46 L49,48 M35,52 L49,54 M35,58 L49,60 M59,48 L73,46 M59,54 L73,52 M59,60 L73,58"/>
+  <path fill="#E53935" d="M66,35 L72,34.5 L72,46 L69,43.5 L66,46 Z"/>
+</svg>

@@ -1,9 +1,9 @@
 # MyBooks
 
-A personal book library for Android. Scan a book's barcode to add it, give it a 1–5 star score,
+A personal book library for Android and iPhone. Scan a book's barcode to add it, give it a 1–5 star score,
 keep notes, and track every book as **Reading** (with start date and progress), **To read** (you own it),
 **Read** or **To buy**.
-All data stays on the phone; you can export/import it as a JSON backup from Settings.
+All data stays on the phone; you can export/import it as a .zip backup from Settings.
 
 ## Features
 
@@ -20,11 +20,30 @@ All data stays on the phone; you can export/import it as a JSON backup from Sett
 - **Cover photo**: when no cover is found, tap the empty cover on the book page (or *Take photo* in
   the edit form) to photograph the book with the phone's camera app. Photos are shrunk to about
   1000 px and stored privately in the app.
+- **Community** (optional, needs a Supabase project, see [docs/social-setup.md](docs/social-setup.md)):
+  sign in with an email code, choose a username, find people, send and accept friend requests,
+  block and report, choose who sees your activity, delete your account. Your library stays on the phone.
+- **Activity** (community): starting, finishing, rating, reviewing and reading progress are shared
+  automatically (switch off in Account, or per book with *Don't share this book*). The Activity
+  screen shows your friends' and public readers' entries; like them, see who liked, report, or add
+  the book to your own library. Reviews are a separate field from your private notes.
 - **Settings**: export the library, including cover photos, to a `.zip` file / import it back
   (older `.json` backups still import; merges, never deletes).
 
-Scanning uses Google's code scanner from Google Play services, so the phone needs Play services
-(almost all Android phones have them). No camera permission is requested.
+On Android, scanning uses Google's code scanner from Google Play services, so the phone needs Play
+services (almost all Android phones have them). No camera permission is requested.
+
+## Project layout
+
+One Kotlin Multiplatform codebase:
+
+- `shared/`: everything common to both apps (book data and rules, Room database, BNP / Google /
+  Open Library lookups, backups, ViewModels and the Compose Multiplatform screens). Platform parts
+  (barcode scanner, camera, file pickers, photo shrinking, SQLite driver) sit behind small interfaces
+  in `androidMain` and `iosMain`.
+- `androidApp/`: the Android app shell.
+- `iosApp/`: the iPhone app shell (an XcodeGen project, generated and built in GitHub Actions).
+  See [docs/ios-setup.md](docs/ios-setup.md) for installing it on an iPhone through TestFlight.
 
 ## Build
 
@@ -58,11 +77,11 @@ The key is compiled into the APK, so don't share the APK publicly.
 Then:
 
 ```sh
-./gradlew testDebugUnitTest   # unit tests
-./gradlew assembleDebug       # → app/build/outputs/apk/debug/app-debug.apk
+./gradlew :shared:testAndroidHostTest :androidApp:testDebugUnitTest   # tests
+./gradlew :androidApp:assembleDebug   # → androidApp/build/outputs/apk/debug/androidApp-debug.apk
 ```
 
-## Install on your phone
+## Install on an Android phone
 
 **Option A — USB cable (adb)**
 
@@ -71,12 +90,12 @@ Then:
 3. Connect the phone, accept the "Allow USB debugging?" prompt, then run:
 
    ```sh
-   <sdk>/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk
+   <sdk>/platform-tools/adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
    ```
 
 **Option B — copy the APK**
 
-Copy `app-debug.apk` to the phone (cable, Google Drive, email…), open it from the Files app and
+Copy `androidApp-debug.apk` to the phone (cable, Google Drive, email…), open it from the Files app and
 allow *Install unknown apps* for that app when asked.
 
 Reinstalling a newer build with `adb install -r` (or over the top) keeps your library.

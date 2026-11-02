@@ -1,0 +1,212 @@
+package com.mcosta.mybooks.ui.social
+
+import com.mcosta.mybooks.MainDispatcherTest
+import com.mcosta.mybooks.data.BookRepository
+import com.mcosta.mybooks.data.FakeBookDao
+import com.mcosta.mybooks.data.lookup.BookLookupService
+import com.mcosta.mybooks.data.lookup.LookupResult
+import com.mcosta.mybooks.domain.ReadingStatus
+import com.mcosta.mybooks.social.FakeSocial
+import com.mcosta.mybooks.social.model.ActivityKind
+import com.mcosta.mybooks.social.model.Visibility
+import com.mcosta.mybooks.social.model.Relationship
+import com.mcosta.mybooks.social.model.ReportReason
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class ProfileViewModelTest : MainDispatcherTest() {
+    private val fake = FakeSocial()
+    private val ana = fake.addUser("ana")
+    private val bruno = fake.addUser("bruno")
+
+    private fun vm(userId: String = bruno) = ProfileViewModel(fake.services, userId)
+
+    @Test
+    fun actionsFollowRelationship() = runTest {
+        fake.signInAs(ana)
+        val vm = vm()
+        assertEquals("bruno", vm.state.value.person?.username)
+        assertEquals(Relationship.NONE, vm.state.value.relationship)
+        vm.add()
+        assertEquals(Relationship.REQUEST_SENT, vm.state.value.relationship)
+        vm.cancel()
+        assertEquals(Relationship.NONE, vm.state.value.relationship)
+    }
+
+    @Test
+    fun acceptAndRemoveFriend() = runTest {
+        fake.signInAs(bruno)
+        fake.friendsService.sendRequest(ana)
+        fake.signInAs(ana)
+        val vm = vm()
+        assertEquals(Relationship.REQUEST_RECEIVED, vm.state.value.relationship)
+        vm.accept()
+        assertEquals(Relationship.FRIENDS, vm.state.value.relationship)
+        vm.removeFriend()
+        assertEquals(Relationship.NONE, vm.state.value.relationship)
+    }
+
+    @Test
+    fun declineRequest() = runTest {
+        fake.signInAs(bruno)
+        fake.friendsService.sendRequest(ana)
+        fake.signInAs(ana)
+        val vm = vm()
+        vm.decline()
+        assertEquals(Relationship.NONE, vm.state.value.relationship)
+    }
+
+    @Test
+    fun blockLeavesScreen() = runTest {
+        fake.signInAs(ana)
+        val vm = vm()
+        vm.block()
+        assertTrue(vm.state.value.left)
+        assertNull(fake.profileService.person(bruno))
+    }
+
+    @Test
+    fun reportSendsReasonAndTrimmedDetails() = runTest {
+        fake.signInAs(ana)
+        val vm = vm()
+        vm.report(ReportReason.SPAM, "  sells followers  ")
+        assertEquals(FakeSocial.Report(ana, bruno, ReportReason.SPAM, "sells followers"), fake.reports.single())
+        assertEquals("Thanks, we'll look into it", vm.state.value.message)
+    }
+
+    @Test
+    fun blankReportDetailsSentAsNull() = runTest {
+        fake.signInAs(ana)
+        vm().report(ReportReason.OTHER, "   ")
+        assertNull(fake.reports.single().details)
+    }
+
+    @Test
+    fun reportDetailsLimitedTo1000() = runTest {
+        fake.signInAs(ana)
+        vm().report(ReportReason.HARASSMENT, "x".repeat(1500))
+        assertEquals(1000, fake.reports.single().details?.length)
+    }
+
+    @Test
+    fun blockedProfileShowsNotAvailable() = runTest {
+        fake.signInAs(bruno)
+        fake.safetyService.block(ana)
+        fake.signInAs(ana)
+        val vm = vm()
+        assertTrue(vm.state.value.notAvailable)
+        assertNull(vm.state.value.person)
+    }
+
+    @Test
+    fun ownProfileHasNoFriendActions() = runTest {
+        fake.signInAs(ana)
+        val vm = vm(ana)
+        assertTrue(vm.state.value.isMe)
+        assertFalse(vm.state.value.notAvailable)
+    }
+
+    @Test
+    fun publicStrangerShowsActivity() = runTest {
+        val carla = fake.addUser("carla").also { fake.setVisibility(it, Visibility.PUBLIC) }
+        fake.addEntry(carla, ActivityKind.FINISHED, title = "Emma")
+        fake.signInAs(ana)
+        val state = vm(carla).state.value
+        assertFalse(state.activityHidden)
+        assertEquals(listOf("Emma"), state.activity.map { it.book.title })
+    }
+
+    @Test
+    fun friendsOnlyStrangerShowsHidden() = runTest {
+        fake.addEntry(bruno, ActivityKind.FINISHED)
+        fake.signInAs(ana)
+        val state = vm().state.value
+        assertTrue(state.activityHidden)
+        assertTrue(state.activity.isEmpty())
+        assertEquals(0, fake.personActivityCalls)
+    }
+
+    @Test
+    fun friendShowsActivity() = runTest {
+        fake.makeFriends(ana, bruno)
+        val id = fake.addEntry(bruno, ActivityKind.STARTED, title = "Dune")
+        fake.signInAs(ana)
+        val vm = vm()
+        assertFalse(vm.state.value.activityHidden)
+        assertEquals(listOf("Dune"), vm.state.value.activity.map { it.book.title })
+        vm.toggleLike(id)
+        assertTrue(vm.state.value.activity.single().likedByMe)
+        assertEquals(1, vm.state.value.activity.single().likeCount)
+    }
+
+    @Test
+    fun likersShownOnProfile() = runTest {
+        fake.makeFriends(ana, bruno)
+        val id = fake.addEntry(bruno, ActivityKind.STARTED)
+        fake.signInAs(ana)
+        fake.activityService.like(id)
+        val vm = vm()
+        vm.showLikers(id)
+        assertEquals(listOf("ana"), vm.state.value.likers?.map { it.username })
+        vm.dismissLikers()
+        assertNull(vm.state.value.likers)
+    }
+
+    private val books = FakeBookDao()
+    private val repo = BookRepository(books, object : BookLookupService {
+        override suspend fun lookup(isbn: String) = LookupResult.NotFound
+    })
+
+    @Test
+    fun profilePagingRecoversAfterFailure() = runTest {
+        fake.makeFriends(ana, bruno)
+        repeat(25) { fake.addEntry(bruno, ActivityKind.PROGRESS, title = "Book $it") }
+        fake.signInAs(ana)
+        val vm = vm()
+        assertEquals(20, vm.state.value.activity.size)
+        fake.offline = true
+        vm.loadMoreActivity()
+        assertEquals(20, vm.state.value.activity.size)
+        assertEquals("You're offline", vm.state.value.message)
+        fake.offline = false
+        vm.loadMoreActivity()
+        assertEquals(25, vm.state.value.activity.size)
+        assertNull(vm.state.value.activityNext)
+    }
+
+    @Test
+    fun profileOpenBookAndAddToLibrary() = runTest {
+        fake.makeFriends(ana, bruno)
+        fake.addEntry(bruno, ActivityKind.FINISHED, title = "Emma", isbn = "9780141439587")
+        fake.signInAs(ana)
+        val vm = ProfileViewModel(fake.services, bruno, repo)
+        vm.openBook(vm.state.value.activity.single().book)
+        assertFalse(vm.state.value.openBookInLibrary)
+        vm.addToLibrary(ReadingStatus.TO_READ)
+        assertEquals(ReadingStatus.TO_READ, books.getAll().single().status)
+        assertEquals("Added to To read", vm.state.value.message)
+        assertTrue(vm.state.value.openBookInLibrary)
+        vm.closeBook()
+        assertNull(vm.state.value.openBook)
+    }
+
+    @Test
+    fun secondTapWhileLikeInFlightIgnoredOnProfile() = runTest {
+        fake.makeFriends(ana, bruno)
+        val id = fake.addEntry(bruno, ActivityKind.STARTED)
+        fake.signInAs(ana)
+        val vm = vm()
+        val gate = CompletableDeferred<Unit>()
+        fake.onLike = { gate.await() }
+        vm.toggleLike(id)
+        vm.toggleLike(id)
+        gate.complete(Unit)
+        assertTrue(vm.state.value.activity.single().likedByMe)
+        assertEquals(listOf("ana"), fake.activityService.likers(id).map { it.username })
+    }
+}
