@@ -74,4 +74,11 @@ class BookExtractorTest {
 
     @Test
     fun copyrightYearIsRead() = assertEquals(2025, book("2218820").year)
+
+    @Test
+    fun genreOfFixtureBooks() {
+        assertEquals("novel", book("2293200").genre)
+        assertEquals("children", book("2291280").genre)
+        assertEquals("history", book("2290698").genre)
+    }
 }
