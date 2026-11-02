@@ -96,4 +96,14 @@ class BookExtractorTest {
         assertEquals("Ponta Delgada", b.place)
         assertEquals("An unending bridge: the Azorean Islands", b.title)
     }
+
+    @Test
+    fun coverFromNationalLibraryImage() {
+        assertEquals("https://rnod.bnportugal.gov.pt/ImagesBN/winlibimg.aspx?skey=&doc=2293200&img=227367&save=true", book("2293200").cover)
+        val noImage = record(fields = arrayOf(
+            field("010", 'a' to "978-989-568-279-9"), field("200", 'a' to "Sem capa"), field("210", 'd' to "2026"),
+            field("856", 'u' to "https://example.org/other.pdf"),
+        ))
+        assertEquals(null, assertNotNull(BookExtractor.extract(noImage)).cover)
+    }
 }

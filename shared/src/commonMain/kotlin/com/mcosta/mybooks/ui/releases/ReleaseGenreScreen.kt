@@ -35,9 +35,6 @@ import com.mcosta.mybooks.data.releases.monthLabel
 import com.mcosta.mybooks.ui.currentMonth
 import com.mcosta.mybooks.ui.components.BookCover
 
-/** Open Library's cover for an ISBN; a 404 (no cover) shows the placeholder. */
-internal fun openLibraryCover(isbn: String) = "https://covers.openlibrary.org/b/isbn/$isbn-M.jpg?default=false"
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReleaseGenreScreen(viewModel: ReleaseGenreViewModel, title: String, month: String, onBack: () -> Unit, onOpenBook: (String) -> Unit) {
@@ -78,7 +75,7 @@ fun ReleaseGenreScreen(viewModel: ReleaseGenreViewModel, title: String, month: S
 @Composable
 private fun BookRow(book: ReleaseBook, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        BookCover(openLibraryCover(book.isbn), Modifier.width(48.dp).height(72.dp))
+        BookCover(book.listCover, Modifier.width(48.dp).height(72.dp))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(book.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)

@@ -6,6 +6,7 @@ import com.mcosta.mybooks.data.FakeBookDao
 import com.mcosta.mybooks.data.lookup.BookLookupService
 import com.mcosta.mybooks.data.lookup.LookupResult
 import com.mcosta.mybooks.data.releases.ReleaseGenre
+import com.mcosta.mybooks.data.releases.openLibraryCover
 import com.mcosta.mybooks.data.releases.ReleasesClient
 import com.mcosta.mybooks.data.releases.ReleasesRepository
 import com.mcosta.mybooks.domain.Book
@@ -189,5 +190,16 @@ class ReleasesViewModelsTest : MainDispatcherTest() {
         ReleasesViewModel(releases).loaded()
         assertEquals(false, ReleaseGenreViewModel(releases, "2026-11", ReleaseGenre.NOVEL).loaded().state.value.monthComplete)
         assertEquals(true, ReleaseGenreViewModel(releases, "2026-10", ReleaseGenre.NOVEL).loaded().state.value.monthComplete)
+    }
+
+    @Test
+    fun coverFromReleaseFile() = runTest {
+        files["2026-11.json"] = """{"version":1,"month":"2026-11","updated":"x","books":[
+            {"id":"7","isbn":"9789895682799","title":"Com capa","year":2026,"genre":"novel","cover":"https://rnod.bnportugal.gov.pt/ImagesBN/x.jpg"}]}"""
+        releases.books("2026-11")
+        val vm = ReleaseBookViewModel(releases, library, "2026-11", "7")
+        assertEquals("https://rnod.bnportugal.gov.pt/ImagesBN/x.jpg", vm.state.value.coverUrl)
+        assertEquals("https://rnod.bnportugal.gov.pt/ImagesBN/x.jpg", releases.books("2026-11").value.single().listCover)
+        assertEquals(openLibraryCover("9789895682799"), releases.books("2026-10").value.first().listCover)
     }
 }

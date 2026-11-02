@@ -41,6 +41,7 @@ object BookExtractor {
             year = year,
             genre = GenreClassifier.classify(record.fields("675").mapNotNull { it.first('a') }),
             link = record.controls["003"],
+            cover = record.fields("856").flatMap { it.all('u') }.firstOrNull { "/ImagesBN/" in it }?.trim()?.replaceFirst("http://", "https://"),
         )
     }
 

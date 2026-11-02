@@ -32,4 +32,6 @@ data class ReleaseBook(
     val year: Int,
     val genre: String,
     val link: String? = null,
+    /** The National Library's cover image (`856$u` under `/ImagesBN/`), as https; null when it has none. */
+    val cover: String? = null,
 )
