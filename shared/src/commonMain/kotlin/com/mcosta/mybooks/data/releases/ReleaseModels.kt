@@ -56,9 +56,17 @@ data class ReleaseBook(
     val year: Int? = null,
     val genre: String = "other",
     val link: String? = null,
+    /** The National Library's cover image, when it has one. */
+    val cover: String? = null,
 ) {
     val genreType: ReleaseGenre get() = ReleaseGenre.of(genre)
+
+    /** The cover to show in lists: the Library's, else Open Library's by ISBN (a placeholder when it has none). */
+    val listCover: String get() = cover ?: openLibraryCover(isbn)
 }
+
+/** Open Library's cover for an ISBN; a 404 (no cover) shows the placeholder. */
+fun openLibraryCover(isbn: String) = "https://covers.openlibrary.org/b/isbn/$isbn-M.jpg?default=false"
 
 data class StoreLink(val name: String, val url: String)
 
