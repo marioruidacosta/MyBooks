@@ -35,6 +35,8 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.storage.storage
 import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.network.sockets.SocketTimeoutException
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
@@ -64,7 +66,11 @@ fun createSocialServices(config: SocialConfig, engine: HttpClientEngine, setting
  */
 internal val SUPABASE_REQUEST_TIMEOUT = 30.seconds
 
-private fun isTimeout(e: Throwable) = generateSequence(e) { it.cause }.take(10).any { it is HttpRequestTimeoutException }
+/** Request, socket or connect timeouts, also when supabase-kt wraps them (keeping only the message). */
+private fun isTimeout(e: Throwable) = generateSequence(e) { it.cause }.take(10).any {
+    it is HttpRequestTimeoutException || it is SocketTimeoutException || it is ConnectTimeoutException ||
+        it.message.orEmpty().contains("timeout has expired", ignoreCase = true)
+}
 
 internal fun supabaseClient(
     config: SocialConfig,
