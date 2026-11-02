@@ -174,4 +174,34 @@ class ReleasesRepositoryTest {
         val r = ReleasesRepository(ReleasesClient(HttpClient(engine) { expectSuccess = false }, base), broken, "/releases".toPath(), { now })
         assertEquals("2026-10", r.months().value.single().month)
     }
+
+    @Test
+    fun monthRefetchedWhenIndexTotalDiffers() = runTest {
+        repo.months()
+        repo.books("2026-10")
+        requests.clear()
+        now += 7.hours
+        files["index.json"] = fixture("releases_index.json").replace("\"total\":8", "\"total\":9")
+        repo.months()
+        repo.books("2026-10")
+        assertEquals(listOf("index.json", "2026-10.json"), requests)
+    }
+
+    @Test
+    fun oldSavedMonthsDeletedAfterIndexRefresh() = runTest {
+        files["2026-03.json"] = """{"version":1,"month":"2026-03","updated":"x","books":[]}"""
+        repo.books("2026-03")
+        assertTrue(fs.exists("/releases/2026-03.json".toPath()))
+        repo.months()
+        assertFalse(fs.exists("/releases/2026-03.json".toPath()))
+        assertFalse(fs.exists("/releases/2026-03.at".toPath()))
+        assertTrue(fs.exists("/releases/index.json".toPath()))
+    }
+
+    @Test
+    fun savedMonthInfoComesFromIndex() = runTest {
+        assertEquals(null, repo.savedMonth("2026-10"))
+        repo.months()
+        assertEquals(true, repo.savedMonth("2026-10")?.complete)
+    }
 }

@@ -31,19 +31,30 @@ class ReleasesRepository(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun months(): Cached<List<ReleaseMonth>> =
-        load("index", CURRENT_MAX_AGE, { client.index() }) { text ->
+    /** The months, newest first. Saved months no longer listed are deleted from the phone. */
+    suspend fun months(): Cached<List<ReleaseMonth>> {
+        val cached = load("index", CURRENT_MAX_AGE, { client.index() }) { text ->
             json.decodeFromString<IndexJson>(text).months.sortedByDescending { it.month }.map { it.toMonth() }
         }
+        if (!cached.offline) withContext(io) { prune(keep = cached.value.map { it.month }.toSet()) }
+        return cached
+    }
 
-    /** The month's books, A–Z by title (ignoring case and accents). */
+    /**
+     * The month's books, A–Z by title (ignoring case and accents). A saved copy whose size no longer matches
+     * the saved index (books added after it was downloaded) is downloaded again.
+     */
     suspend fun books(month: String): Cached<List<ReleaseBook>> {
-        val complete = savedIndexMonth(month)?.complete ?: false
-        return load(month, if (complete) PAST_MAX_AGE else CURRENT_MAX_AGE, { client.month(month) }) { text ->
+        val info = savedIndexMonth(month)
+        val maxAge = if (info?.complete == true) PAST_MAX_AGE else CURRENT_MAX_AGE
+        return load(month, maxAge, { client.month(month) }, outdated = { books -> info != null && books.size != info.total }) { text ->
             // Keys computed once per book, not per comparison.
             json.decodeFromString<MonthJson>(text).books.map { searchKey(it.title) to it }.sortedBy { it.first }.map { it.second }
         }
     }
+
+    /** The month as listed in the saved index (no download), or null. */
+    suspend fun savedMonth(month: String): ReleaseMonth? = savedIndexMonth(month)?.toMonth()
 
     /** A book from the saved month file (no download). */
     suspend fun book(month: String, id: String): ReleaseBook? = withContext(io) {
@@ -55,12 +66,18 @@ class ReleasesRepository(
     }
 
     /** Reading, parsing and saving all run on [io], off the main thread. */
-    private suspend fun <T : Any> load(name: String, maxAge: Duration, download: suspend () -> String, parse: (String) -> T): Cached<T> {
+    private suspend fun <T : Any> load(
+        name: String,
+        maxAge: Duration,
+        download: suspend () -> String,
+        outdated: (T) -> Boolean = { false },
+        parse: (String) -> T,
+    ): Cached<T> {
         val now = clock()
         val savedValue = withContext(io) {
             read(name)?.let { (text, at) -> parseOrNull { parse(text) }?.let { Cached(it, at, offline = false) } }
         }
-        if (savedValue != null && now - savedValue.savedAt < maxAge) return savedValue
+        if (savedValue != null && now - savedValue.savedAt < maxAge && !outdated(savedValue.value)) return savedValue
         val text = try {
             download()
         } catch (e: ReleasesUnavailable) {
@@ -106,7 +123,21 @@ class ReleasesRepository(
         }
     }
 
+    /** Deletes saved month files (and their dates) not in [keep]; best effort. */
+    private fun prune(keep: Set<String>) {
+        try {
+            if (!fs.exists(dir)) return
+            for (path in fs.list(dir)) {
+                val month = path.name.substringBeforeLast('.')
+                if (MONTH.matches(month) && month !in keep) fs.delete(path)
+            }
+        } catch (e: IOException) {
+            Unit
+        }
+    }
+
     private companion object {
+        val MONTH = Regex("""\d{4}-\d{2}""")
         val CURRENT_MAX_AGE = 6.hours
         val PAST_MAX_AGE = 24.hours
     }

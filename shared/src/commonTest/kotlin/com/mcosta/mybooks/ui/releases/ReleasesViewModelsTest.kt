@@ -183,4 +183,11 @@ class ReleasesViewModelsTest : MainDispatcherTest() {
         val vm = ReleaseBookViewModel(releases, library, "2026-10", "2293200")
         assertTrue(vm.state.value.inLibrary)
     }
+
+    @Test
+    fun genreScreenMonthCompletenessFromIndex() = runTest {
+        ReleasesViewModel(releases).loaded()
+        assertEquals(false, ReleaseGenreViewModel(releases, "2026-11", ReleaseGenre.NOVEL).loaded().state.value.monthComplete)
+        assertEquals(true, ReleaseGenreViewModel(releases, "2026-10", ReleaseGenre.NOVEL).loaded().state.value.monthComplete)
+    }
 }

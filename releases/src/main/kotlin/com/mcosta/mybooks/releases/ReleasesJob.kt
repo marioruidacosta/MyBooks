@@ -32,7 +32,8 @@ class ReleasesJob(
         val state = store.state()
         val windows = if (state == null) backfillWindows(yesterday) else listOf(LocalDate.parse(state.harvestedUntil).minusDays(1) to yesterday)
 
-        val seen = store.seen().toMutableSet()
+        // Books already in a month file count as listed even if seen.txt missed them (an interrupted local run).
+        val seen = (store.seen() + store.months().flatMap { m -> store.month(m)?.books.orEmpty().map { it.id } }).toMutableSet()
         val changed = mutableMapOf<String, MutableList<ReleaseBook>>()
         var pages = 0
         var added = 0

@@ -57,13 +57,19 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if git ls-remote --exit-code --heads origin releases-data > /dev/null; then
+          # Exit code 2 means "no such branch"; any other failure (network, auth) stops the run.
+          rc=0
+          git ls-remote --exit-code --heads origin releases-data > /dev/null || rc=$?
+          if [ "$rc" -eq 0 ]; then
             git clone --quiet --single-branch --branch releases-data "$remote" data
-          else
+          elif [ "$rc" -eq 2 ]; then
             mkdir data
             git -C data init --quiet -b releases-data
             git -C data remote add origin "$remote"
             git -C data commit --quiet --allow-empty -m "Start releases data"
+          else
+            echo "::error::Couldn't check the releases-data branch (git ls-remote exit $rc)"
+            exit "$rc"
           fi
       - name: Harvest
         run: bash .github/scripts/annotate.sh ./gradlew :releases:run --args="--data-dir $GITHUB_WORKSPACE/data"
@@ -75,9 +81,11 @@ jobs:
             git commit --quiet -m "Releases $(date -u +%F)"
           fi
           git push --quiet origin releases-data
+      - name: Site (only the published lists, not the job state)
+        run: mkdir -p site && cp -r data/releases site/releases
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: data
+          path: site
       - id: deploy
         uses: actions/deploy-pages@v4

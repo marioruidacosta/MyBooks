@@ -19,6 +19,8 @@ data class GenreBooksState(
     val error: String? = null,
     /** Set when the saved copy is shown because the download failed. */
     val savedAt: Instant? = null,
+    /** Whether the month is over, from the saved index (null until known). */
+    val monthComplete: Boolean? = null,
 )
 
 /** One genre's new books in one month, A–Z. */
@@ -37,6 +39,9 @@ class ReleaseGenreViewModel(
     fun retry() {
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
+            // "(so far)" follows the month list, like the month picker, not the phone's clock.
+            val complete = repo.savedMonth(month)?.complete
+            _state.update { it.copy(monthComplete = complete) }
             try {
                 val cached = repo.books(month)
                 _state.update {

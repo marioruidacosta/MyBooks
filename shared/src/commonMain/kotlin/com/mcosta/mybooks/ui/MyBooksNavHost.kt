@@ -15,7 +15,6 @@ import com.mcosta.mybooks.platform.ScanOutcome
 import com.mcosta.mybooks.share.SharingState
 import com.mcosta.mybooks.social.model.SessionState
 import com.mcosta.mybooks.data.releases.ReleaseGenre
-import com.mcosta.mybooks.data.releases.monthLabel
 import com.mcosta.mybooks.ui.releases.ReleaseBookScreen
 import com.mcosta.mybooks.ui.releases.ReleaseBookViewModel
 import com.mcosta.mybooks.ui.releases.ReleaseGenreScreen
@@ -136,11 +135,10 @@ fun MyBooksNavHost(container: AppContainer) {
         ) { entry ->
             val month = entry.savedStateHandle.get<String>("month")!!
             val genre = ReleaseGenre.of(entry.savedStateHandle.get<String>("genre")!!)
-            val complete = month < currentMonth()
             ReleaseGenreScreen(
                 viewModel = viewModel { ReleaseGenreViewModel(container.releases, month, genre) },
                 title = genre.label,
-                subtitle = monthLabel(month, complete),
+                month = month,
                 onBack = { nav.popBackStack() },
                 onOpenBook = { id -> nav.navigate(Routes.releaseBook(month, id)) },
             )

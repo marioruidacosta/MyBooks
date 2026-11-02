@@ -174,6 +174,16 @@ class ReleasesJobTest {
         assertFailsWith<OaiException> { ReleasesJob(stuck, store, LocalDate.parse("2026-11-03"), now, retryDelay = {}).run() }
         assertEquals("2026-11-01", store.state()!!.harvestedUntil)
     }
+    /** A local run killed after writing a month file but before seen.txt must not list its books twice. */
+    @Test
+    fun bookInMonthFileButNotSeenIsNotDuplicated() {
+        val casa = BookExtractor.extract(Fixtures.record("2293200"))!!
+        store.write(JobState("2026-11-01"), emptySet(), mapOf("2026-11" to MonthFile(month = "2026-11", updated = "x", books = listOf(casa))),
+            IndexFile(updated = "x", months = emptyList()), emptyList())
+        job(FakeOaiSource(books("2293200" to "2026-11-02"))).run()
+        assertEquals(listOf("2293200"), idsIn("2026-11"))
+    }
+
 }
 
 class DataStoreTest {

@@ -31,6 +31,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mcosta.mybooks.data.releases.ReleaseBook
+import com.mcosta.mybooks.data.releases.monthLabel
+import com.mcosta.mybooks.ui.currentMonth
 import com.mcosta.mybooks.ui.components.BookCover
 
 /** Open Library's cover for an ISBN; a 404 (no cover) shows the placeholder. */
@@ -38,8 +40,10 @@ internal fun openLibraryCover(isbn: String) = "https://covers.openlibrary.org/b/
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReleaseGenreScreen(viewModel: ReleaseGenreViewModel, title: String, subtitle: String, onBack: () -> Unit, onOpenBook: (String) -> Unit) {
+fun ReleaseGenreScreen(viewModel: ReleaseGenreViewModel, title: String, month: String, onBack: () -> Unit, onOpenBook: (String) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Completeness from the saved month list; the clock only until that is known.
+    val subtitle = monthLabel(month, state.monthComplete ?: (month < currentMonth()))
     Scaffold(
         topBar = {
             TopAppBar(
