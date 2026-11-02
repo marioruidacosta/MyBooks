@@ -2,6 +2,8 @@ package com.mcosta.mybooks.data
 
 import com.mcosta.mybooks.data.backup.BackupFormatException
 import com.mcosta.mybooks.data.backup.BackupSerializer
+import com.mcosta.mybooks.data.backup.BackupShare
+import com.mcosta.mybooks.share.ShareTracker
 import com.mcosta.mybooks.data.lookup.BookLookupService
 import com.mcosta.mybooks.data.lookup.LookupResult
 import com.mcosta.mybooks.domain.Book
@@ -102,5 +104,48 @@ class BookRepositoryBackupTest {
         val txRepo = BookRepository(dao, lookup, clock = { 1L }, transactionRunner = { block -> ran = true; block() })
         txRepo.importJson(backup(Book(title = "X")))
         assertTrue(ran)
+    }
+
+    private val shares = FakeShareStateDao()
+    private var owner: String? = null
+    private var pendingCalls = 0
+    private val sharingRepo = BookRepository(
+        dao, lookup, clock = { 1000L },
+        shareTracker = ShareTracker(shares, activeOwner = { owner }, onPending = { pendingCalls++ }),
+    )
+
+    @Test
+    fun restoredBooksAreNotPending() = runTest {
+        val json = BackupSerializer.encode(
+            listOf(Book(id = 7, title = "Dune", review = "Great"), Book(id = 8, title = "Emma")),
+            exportedAt = 0,
+            shares = mapOf(7L to BackupShare("share-7", excluded = false), 8L to BackupShare("share-8", excluded = true)),
+        )
+        sharingRepo.importJson(json)
+        val rows = shares.all()
+        assertEquals(listOf("share-7", "share-8"), rows.map { it.shareId })
+        assertTrue(rows.none { it.pending || it.hasBefore })
+        assertEquals(listOf("", ""), rows.map { it.owner })
+        assertEquals(listOf(false, true), rows.map { it.excluded })
+        assertEquals("Great", dao.getAll().first { it.title == "Dune" }.review)
+        assertEquals(0, pendingCalls)
+    }
+
+    @Test
+    fun importDoesNotTrackChanges() = runTest {
+        owner = "ana"
+        sharingRepo.importJson(backup(Book(title = "Dune", rating = 5, status = ReadingStatus.READ)))
+        assertTrue(shares.all().isEmpty())
+        assertEquals(0, pendingCalls)
+    }
+
+    @Test
+    fun exportIncludesShareInfo() = runTest {
+        owner = "ana"
+        val id = (sharingRepo.save(Book(title = "Dune")) as SaveResult.Saved).id
+        sharingRepo.setShareExcluded(id, true)
+        val decoded = BackupSerializer.decodeWithShares(sharingRepo.exportJson())
+        assertEquals(true, decoded.single().second?.excluded)
+        assertEquals(shares.get(id)!!.shareId, decoded.single().second?.shareId)
     }
 }

@@ -13,7 +13,9 @@ import com.mcosta.mybooks.data.lookup.LookupResult
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.Isbn
 import com.mcosta.mybooks.domain.ReadingStatus
+import com.mcosta.mybooks.share.ShareTracker
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlin.time.Clock
 
@@ -40,6 +42,8 @@ class BookRepository(
     private val transactionRunner: suspend (suspend () -> Unit) -> Unit = { it() },
     /** Cover photos taken in the app; null in tests that don't involve them. */
     private val coverStore: CoverStore? = null,
+    /** Community sharing; null when the community isn't configured (and in most tests). */
+    private val shareTracker: ShareTracker? = null,
 ) {
     fun observeBooks(status: ReadingStatus?, query: String): Flow<List<Book>> =
         dao.observe(status, searchPattern(query)).map { list -> list.map { it.toBook() } }
@@ -65,11 +69,16 @@ class BookRepository(
             if (existing != null && existing.id != validated.id) return SaveResult.DuplicateIsbn
         }
         return if (validated.id == 0L) {
-            SaveResult.Saved(dao.insert(withStatusDates(validated.copy(dateAdded = clock())).toEntity()))
+            val inserted = withStatusDates(validated.copy(dateAdded = clock()))
+            val id = dao.insert(inserted.toEntity())
+            shareTracker?.changed(null, inserted.copy(id = id))
+            SaveResult.Saved(id)
         } else {
             val stored = dao.getById(validated.id)
             val merged = validated.copy(dateAdded = stored?.dateAdded ?: validated.dateAdded)
-            dao.update(withStatusDates(merged).toEntity())
+            val updated = withStatusDates(merged)
+            dao.update(updated.toEntity())
+            shareTracker?.changed(stored?.toBook(), updated)
             if (stored != null && stored.coverUrl != merged.coverUrl) coverStore?.delete(stored.coverUrl)
             SaveResult.Saved(validated.id)
         }
@@ -116,9 +125,18 @@ class BookRepository(
     }
 
     suspend fun delete(id: Long) {
-        val cover = dao.getById(id)?.coverUrl
+        val book = dao.getById(id)?.toBook()
         dao.delete(id)
-        coverStore?.delete(cover)
+        coverStore?.delete(book?.coverUrl)
+        if (book != null) shareTracker?.deleted(book)
+    }
+
+    /** Whether the book is excluded from sharing ("Don't share this book"). */
+    fun observeShareExcluded(id: Long): Flow<Boolean> = shareTracker?.observeExcluded(id) ?: flowOf(false)
+
+    suspend fun setShareExcluded(id: Long, excluded: Boolean) {
+        val book = getBook(id) ?: return
+        shareTracker?.setExcluded(book, excluded)
     }
 
     /** A .zip backup: library.json plus the cover photos taken in the app (covers/<name>). */
@@ -129,7 +147,7 @@ class BookRepository(
             val bytes = coverStore.read(ref) ?: return@mapNotNull null
             (BACKUP_COVERS + name) to bytes
         }
-        return Zip.write(listOf(BACKUP_LIBRARY to BackupSerializer.encode(books, clock()).encodeToByteArray()) + photos)
+        return Zip.write(listOf(BACKUP_LIBRARY to BackupSerializer.encode(books, clock(), shares()).encodeToByteArray()) + photos)
     }
 
     /** Restores a .zip backup (with cover photos) or an older plain .json backup. */
@@ -146,7 +164,9 @@ class BookRepository(
         return importJson(library)
     }
 
-    suspend fun exportJson(): String = BackupSerializer.encode(dao.getAll().map { it.toBook() }, clock())
+    suspend fun exportJson(): String = BackupSerializer.encode(dao.getAll().map { it.toBook() }, clock(), shares())
+
+    private suspend fun shares() = shareTracker?.exportShares() ?: emptyMap()
 
     /**
      * Merges a backup into the library: books whose ISBN is already present are updated, the rest
@@ -154,13 +174,13 @@ class BookRepository(
      * Throws [BackupFormatException] before writing anything if [json] is not a valid backup.
      */
     suspend fun importJson(json: String): ImportSummary {
-        val books = BackupSerializer.decode(json)
+        val books = BackupSerializer.decodeWithShares(json)
         var added = 0
         var updated = 0
         var failed = 0
         transactionRunner {
             val seenIsbns = mutableSetOf<String>()
-            for (raw in books) {
+            for ((raw, share) in books) {
                 val book = (validate(raw.copy(id = 0)) as? Validation.Ok)?.book
                 if (book == null || (book.isbn != null && !seenIsbns.add(book.isbn))) {
                     failed++
@@ -174,10 +194,12 @@ class BookRepository(
                 }
                 if (existing != null) {
                     dao.update(withStatusDates(book.copy(id = existing.id, dateAdded = existing.dateAdded)).toEntity())
+                    if (share != null) shareTracker?.restored(existing.id, share)
                     updated++
                 } else {
                     val dateAdded = if (book.dateAdded > 0) book.dateAdded else clock()
-                    dao.insert(withStatusDates(book.copy(dateAdded = dateAdded)).toEntity())
+                    val id = dao.insert(withStatusDates(book.copy(dateAdded = dateAdded)).toEntity())
+                    if (share != null) shareTracker?.restored(id, share)
                     added++
                 }
             }
@@ -187,7 +209,9 @@ class BookRepository(
 
     private suspend fun modify(id: Long, change: (Book) -> Book) {
         val book = dao.getById(id)?.toBook() ?: return
-        dao.update(change(book).toEntity())
+        val changed = change(book)
+        dao.update(changed.toEntity())
+        shareTracker?.changed(book, changed)
     }
 
     /**
