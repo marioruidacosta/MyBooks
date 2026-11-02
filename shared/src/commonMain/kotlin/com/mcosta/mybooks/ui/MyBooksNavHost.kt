@@ -142,7 +142,7 @@ fun MyBooksNavHost(container: AppContainer) {
             composable(Routes.PROFILE, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
                 val userId = entry.savedStateHandle.get<String>("id")!!
                 ProfileScreen(
-                    viewModel { ProfileViewModel(social, userId) },
+                    viewModel { ProfileViewModel(social, userId, container.repository) },
                     onBack = { nav.popBackStack() },
                     onOpenPerson = { nav.navigate(Routes.profile(it)) },
                 )

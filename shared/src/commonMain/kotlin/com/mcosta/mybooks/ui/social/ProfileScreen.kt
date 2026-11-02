@@ -142,7 +142,7 @@ fun ProfileScreen(viewModel: ProfileViewModel, onBack: () -> Unit, onOpenPerson:
                         FeedEntryCard(
                             entry = entry,
                             onPerson = {},
-                            onBook = {},
+                            onBook = { viewModel.openBook(entry.book) },
                             onLike = if (state.isMe) null else ({ viewModel.toggleLike(entry.id) }),
                             onLikers = { viewModel.showLikers(entry.id) },
                             onReport = if (state.isMe) null else ({ reportingEntry = entry }),
@@ -156,6 +156,9 @@ fun ProfileScreen(viewModel: ProfileViewModel, onBack: () -> Unit, onOpenPerson:
 
     state.likers?.let { people ->
         LikersSheet(people, onPerson = { viewModel.dismissLikers(); onOpenPerson(it) }, onDismiss = viewModel::dismissLikers)
+    }
+    state.openBook?.let { book ->
+        FeedBookSheet(book, state.openBookInLibrary, onAdd = viewModel::addToLibrary, onDismiss = viewModel::closeBook)
     }
     reportingEntry?.let { entry ->
         ReportDialog(

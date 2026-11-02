@@ -3,8 +3,6 @@ package com.mcosta.mybooks.ui.social
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mcosta.mybooks.data.BookRepository
-import com.mcosta.mybooks.data.SaveResult
-import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.social.SocialServices
 import com.mcosta.mybooks.social.model.FeedBook
@@ -53,6 +51,8 @@ class ActivityViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(ActivityState())
     val state: StateFlow<ActivityState> = _state.asStateFlow()
+    private val shelf = LibraryShelf(repository)
+    private val likes = LikeToggler(services.activity, viewModelScope)
 
     init {
         viewModelScope.launch {
@@ -129,18 +129,7 @@ class ActivityViewModel(
     fun toggleLike(entryId: Long) {
         val entry = _state.value.entries.firstOrNull { it.id == entryId } ?: return
         if (entry.actor.id == _state.value.myId) return  // the server refuses likes on your own entries
-        val liking = !entry.likedByMe
-        replace(entryId) { it.copy(likedByMe = liking, likeCount = (it.likeCount + if (liking) 1 else -1).coerceAtLeast(0)) }
-        viewModelScope.launch {
-            try {
-                if (liking) services.activity.like(entryId) else services.activity.unlike(entryId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                replace(entryId) { it.copy(likedByMe = entry.likedByMe, likeCount = entry.likeCount) }
-                _state.update { it.copy(message = socialMessage(e)) }
-            }
-        }
+        likes.toggle(entry, ::replace) { e -> _state.update { it.copy(message = socialMessage(e)) } }
     }
 
     private fun replace(entryId: Long, change: (FeedEntry) -> FeedEntry) =
@@ -159,7 +148,7 @@ class ActivityViewModel(
     fun openBook(book: FeedBook) {
         _state.update { it.copy(openBook = book, openBookInLibrary = false) }
         viewModelScope.launch {
-            val inLibrary = findInLibrary(book) != null
+            val inLibrary = shelf.contains(book)
             _state.update { if (it.openBook == book) it.copy(openBookInLibrary = inLibrary) else it }
         }
     }
@@ -170,24 +159,15 @@ class ActivityViewModel(
     fun addToLibrary(status: ReadingStatus) {
         val book = _state.value.openBook ?: return
         viewModelScope.launch {
-            if (findInLibrary(book) != null) {
-                _state.update { it.copy(openBookInLibrary = true) }
-                return@launch
+            val added = shelf.add(book, status)
+            _state.update {
+                it.copy(
+                    message = LibraryShelf.message(added, status) ?: it.message,
+                    openBookInLibrary = it.openBookInLibrary || added != LibraryShelf.Added.FAILED,
+                )
             }
-            val result = repository.save(
-                Book(isbn = book.isbn, title = book.title, authors = book.authors, coverUrl = book.coverUrl, status = status)
-            )
-            val message = if (result is SaveResult.Saved) {
-                if (status == ReadingStatus.WISHLIST) "Added to To buy" else "Added to To read"
-            } else {
-                "Couldn't add the book"
-            }
-            _state.update { it.copy(message = message, openBookInLibrary = it.openBookInLibrary || result is SaveResult.Saved) }
         }
     }
-
-    private suspend fun findInLibrary(book: FeedBook): Book? =
-        if (book.isbn != null) repository.findByIsbn(book.isbn) else repository.findByTitleAndAuthors(book.title, book.authors)
 
     fun dismissMessage() = _state.update { it.copy(message = null) }
 

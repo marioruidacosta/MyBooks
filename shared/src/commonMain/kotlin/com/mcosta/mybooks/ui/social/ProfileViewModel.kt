@@ -3,6 +3,9 @@ package com.mcosta.mybooks.ui.social
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mcosta.mybooks.social.SocialServices
+import com.mcosta.mybooks.data.BookRepository
+import com.mcosta.mybooks.domain.ReadingStatus
+import com.mcosta.mybooks.social.model.FeedBook
 import com.mcosta.mybooks.social.model.FeedCursor
 import com.mcosta.mybooks.social.model.FeedEntry
 import com.mcosta.mybooks.social.model.Person
@@ -35,12 +38,22 @@ data class ProfileState(
     val activityHidden: Boolean = false,
     /** Non-null while the "who liked this" sheet is open. */
     val likers: List<Person>? = null,
+    /** The book whose sheet is open. */
+    val openBook: FeedBook? = null,
+    val openBookInLibrary: Boolean = false,
 )
 
 /** Another reader's profile, with the friend action that fits the relationship, block and report. */
-class ProfileViewModel(private val services: SocialServices, private val userId: String) : ViewModel() {
+class ProfileViewModel(
+    private val services: SocialServices,
+    private val userId: String,
+    /** The library, for "Add to my books"; null where that isn't offered. */
+    private val repository: BookRepository? = null,
+) : ViewModel() {
     private val _state = MutableStateFlow(ProfileState())
     val state: StateFlow<ProfileState> = _state.asStateFlow()
+    private val shelf = repository?.let(::LibraryShelf)
+    private val likes = LikeToggler(services.activity, viewModelScope)
 
     init {
         load()
@@ -71,12 +84,24 @@ class ProfileViewModel(private val services: SocialServices, private val userId:
         _state.update { it.copy(activity = page.entries, activityNext = page.next, activityHidden = false) }
     }
 
+    private var loadingMore = false
+
+    /** The next page; after a failure the place is kept, so scrolling down again retries. */
     fun loadMoreActivity() {
         val cursor = _state.value.activityNext ?: return
-        _state.update { it.copy(activityNext = null) }
-        launchAction {
-            val page = services.activity.personActivity(userId, cursor)
-            _state.update { s -> s.copy(activity = (s.activity + page.entries).distinctBy { it.id }, activityNext = page.next) }
+        if (loadingMore) return
+        loadingMore = true
+        viewModelScope.launch {
+            try {
+                val page = services.activity.personActivity(userId, cursor)
+                _state.update { s -> s.copy(activity = (s.activity + page.entries).distinctBy { it.id }, activityNext = page.next) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(message = socialMessage(e)) }
+            } finally {
+                loadingMore = false
+            }
         }
     }
 
@@ -84,18 +109,7 @@ class ProfileViewModel(private val services: SocialServices, private val userId:
     fun toggleLike(entryId: Long) {
         val entry = _state.value.activity.firstOrNull { it.id == entryId } ?: return
         if (_state.value.isMe) return  // the server refuses likes on your own entries
-        val liking = !entry.likedByMe
-        replaceEntry(entryId) { it.copy(likedByMe = liking, likeCount = (it.likeCount + if (liking) 1 else -1).coerceAtLeast(0)) }
-        viewModelScope.launch {
-            try {
-                if (liking) services.activity.like(entryId) else services.activity.unlike(entryId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                replaceEntry(entryId) { it.copy(likedByMe = entry.likedByMe, likeCount = entry.likeCount) }
-                _state.update { it.copy(message = socialMessage(e)) }
-            }
-        }
+        likes.toggle(entry, ::replaceEntry) { e -> _state.update { it.copy(message = socialMessage(e)) } }
     }
 
     fun showLikers(entryId: Long) = launchAction { _state.update { it.copy(likers = services.activity.likers(entryId)) } }
@@ -104,6 +118,32 @@ class ProfileViewModel(private val services: SocialServices, private val userId:
 
     private fun replaceEntry(entryId: Long, change: (FeedEntry) -> FeedEntry) =
         _state.update { s -> s.copy(activity = s.activity.map { if (it.id == entryId) change(it) else it }) }
+
+    fun openBook(book: FeedBook) {
+        val shelf = shelf ?: return
+        _state.update { it.copy(openBook = book, openBookInLibrary = false) }
+        viewModelScope.launch {
+            val inLibrary = shelf.contains(book)
+            _state.update { if (it.openBook == book) it.copy(openBookInLibrary = inLibrary) else it }
+        }
+    }
+
+    fun closeBook() = _state.update { it.copy(openBook = null, openBookInLibrary = false) }
+
+    /** Adds the open book to the library as To read or To buy, unless it's already there. */
+    fun addToLibrary(status: ReadingStatus) {
+        val shelf = shelf ?: return
+        val book = _state.value.openBook ?: return
+        viewModelScope.launch {
+            val added = shelf.add(book, status)
+            _state.update {
+                it.copy(
+                    message = LibraryShelf.message(added, status) ?: it.message,
+                    openBookInLibrary = it.openBookInLibrary || added != LibraryShelf.Added.FAILED,
+                )
+            }
+        }
+    }
 
     fun add() = launchAction { _state.update { it.copy(relationship = services.friends.sendRequest(userId)) } }
 

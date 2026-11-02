@@ -85,9 +85,11 @@ class SharingStatus(
     }
 
     private fun set(new: SharingState) {
-        val wasActive = _state.value.activeOwner != null
+        val old = _state.value
         _state.value = new
-        if (!wasActive && new.activeOwner != null) onActivated()
+        // Became active, or an assumed-active state (offline start) was just confirmed: upload what's waiting.
+        val confirmedNow = !old.confirmed && new.confirmed
+        if (new.activeOwner != null && (old.activeOwner == null || confirmedNow)) onActivated()
     }
 
     private companion object {

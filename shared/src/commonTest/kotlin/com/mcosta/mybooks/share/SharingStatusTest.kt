@@ -132,4 +132,16 @@ class SharingStatusTest {
         status.setShareActivity(false)
         assertNull(activeWhenForgetting)
     }
+
+    @Test
+    fun confirmationAfterOfflineStartTriggersSync() = runTest {
+        fake.offline = true
+        fake.signInAs(ana)
+        status()
+        assertEquals(1, activations)
+        fake.offline = false
+        advanceTimeBy(61.seconds)
+        runCurrent()
+        assertEquals(2, activations)
+    }
 }

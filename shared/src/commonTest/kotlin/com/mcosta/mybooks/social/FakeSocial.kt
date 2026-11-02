@@ -45,6 +45,8 @@ class FakeSocial {
     var personActivityCalls = 0
     /** Runs inside publish, before it succeeds (e.g. to change the book mid-upload). */
     var onPublish: suspend () -> Unit = {}
+    /** Runs inside like and unlike before they take effect (e.g. to hold the call in flight). */
+    var onLike: suspend () -> Unit = {}
 
     private val profiles = linkedMapOf<String, Profile>()
     private val emails = mutableMapOf<String, String>()          // email -> user id
@@ -278,6 +280,7 @@ class FakeSocial {
         }
         override suspend fun like(activityId: Long) {
             check()
+            onLike()
             val me = me()
             val e = entries.firstOrNull { it.id == activityId }
             if (e == null || e.actor == me || !canSeeActivityOf(me, e.actor)) {
@@ -286,7 +289,7 @@ class FakeSocial {
             likes += activityId to me
         }
         override suspend fun unlike(activityId: Long) {
-            check(); likes -= activityId to me()
+            check(); onLike(); likes -= activityId to me()
         }
         override suspend fun likers(activityId: Long): List<Person> {
             check()

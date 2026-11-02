@@ -1,11 +1,17 @@
 package com.mcosta.mybooks.ui.social
 
 import com.mcosta.mybooks.MainDispatcherTest
+import com.mcosta.mybooks.data.BookRepository
+import com.mcosta.mybooks.data.FakeBookDao
+import com.mcosta.mybooks.data.lookup.BookLookupService
+import com.mcosta.mybooks.data.lookup.LookupResult
+import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.social.FakeSocial
 import com.mcosta.mybooks.social.model.ActivityKind
 import com.mcosta.mybooks.social.model.Visibility
 import com.mcosta.mybooks.social.model.Relationship
 import com.mcosta.mybooks.social.model.ReportReason
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -149,5 +155,58 @@ class ProfileViewModelTest : MainDispatcherTest() {
         assertEquals(listOf("ana"), vm.state.value.likers?.map { it.username })
         vm.dismissLikers()
         assertNull(vm.state.value.likers)
+    }
+
+    private val books = FakeBookDao()
+    private val repo = BookRepository(books, object : BookLookupService {
+        override suspend fun lookup(isbn: String) = LookupResult.NotFound
+    })
+
+    @Test
+    fun profilePagingRecoversAfterFailure() = runTest {
+        fake.makeFriends(ana, bruno)
+        repeat(25) { fake.addEntry(bruno, ActivityKind.PROGRESS, title = "Book $it") }
+        fake.signInAs(ana)
+        val vm = vm()
+        assertEquals(20, vm.state.value.activity.size)
+        fake.offline = true
+        vm.loadMoreActivity()
+        assertEquals(20, vm.state.value.activity.size)
+        assertEquals("You're offline", vm.state.value.message)
+        fake.offline = false
+        vm.loadMoreActivity()
+        assertEquals(25, vm.state.value.activity.size)
+        assertNull(vm.state.value.activityNext)
+    }
+
+    @Test
+    fun profileOpenBookAndAddToLibrary() = runTest {
+        fake.makeFriends(ana, bruno)
+        fake.addEntry(bruno, ActivityKind.FINISHED, title = "Emma", isbn = "9780141439587")
+        fake.signInAs(ana)
+        val vm = ProfileViewModel(fake.services, bruno, repo)
+        vm.openBook(vm.state.value.activity.single().book)
+        assertFalse(vm.state.value.openBookInLibrary)
+        vm.addToLibrary(ReadingStatus.TO_READ)
+        assertEquals(ReadingStatus.TO_READ, books.getAll().single().status)
+        assertEquals("Added to To read", vm.state.value.message)
+        assertTrue(vm.state.value.openBookInLibrary)
+        vm.closeBook()
+        assertNull(vm.state.value.openBook)
+    }
+
+    @Test
+    fun secondTapWhileLikeInFlightIgnoredOnProfile() = runTest {
+        fake.makeFriends(ana, bruno)
+        val id = fake.addEntry(bruno, ActivityKind.STARTED)
+        fake.signInAs(ana)
+        val vm = vm()
+        val gate = CompletableDeferred<Unit>()
+        fake.onLike = { gate.await() }
+        vm.toggleLike(id)
+        vm.toggleLike(id)
+        gate.complete(Unit)
+        assertTrue(vm.state.value.activity.single().likedByMe)
+        assertEquals(listOf("ana"), fake.activityService.likers(id).map { it.username })
     }
 }

@@ -12,6 +12,7 @@ import com.mcosta.mybooks.social.model.ActivityKind
 import com.mcosta.mybooks.social.model.FeedScope
 import com.mcosta.mybooks.social.model.ReportReason
 import com.mcosta.mybooks.social.model.Visibility
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -192,5 +193,24 @@ class ActivityViewModelTest : MainDispatcherTest() {
         vm.toggleLike(id)
         assertFalse(vm.state.value.entries.single().likedByMe)
         assertNull(vm.state.value.message)
+    }
+
+    @Test
+    fun secondTapWhileLikeInFlightIgnored() = runTest {
+        val id = fake.addEntry(carla, ActivityKind.RATED)
+        fake.signInAs(ana)
+        val vm = vm()
+        vm.selectScope(FeedScope.EVERYONE)
+        val gate = CompletableDeferred<Unit>()
+        fake.onLike = { gate.await() }
+        vm.toggleLike(id)
+        vm.toggleLike(id)
+        assertTrue(vm.state.value.entries.single().likedByMe)
+        gate.complete(Unit)
+        assertTrue(vm.state.value.entries.single().likedByMe)
+        assertEquals(listOf("ana"), fake.activityService.likers(id).map { it.username })
+        fake.onLike = {}
+        vm.toggleLike(id)
+        assertFalse(vm.state.value.entries.single().likedByMe)
     }
 }
