@@ -37,6 +37,11 @@ class FakeSocial {
     var unpublishedAll = 0
     /** Thrown by publish/unpublish when set (e.g. to simulate a failed upload). */
     var failPublish: SocialException? = null
+    /** Shared ids that belong to another account: publishing them fails with NOT_AVAILABLE. */
+    val takenShareIds = mutableSetOf<String>()
+    var publishAttempts = 0
+    /** Runs inside publish, before it succeeds (e.g. to change the book mid-upload). */
+    var onPublish: suspend () -> Unit = {}
 
     private val profiles = linkedMapOf<String, Profile>()
     private val emails = mutableMapOf<String, String>()          // email -> user id
@@ -237,7 +242,12 @@ class FakeSocial {
 
     val activityService = object : ActivityService {
         override suspend fun publish(book: PublicBookState, before: PublicBookState?) {
-            check(); failPublish?.let { throw it }; published += book to before
+            check()
+            publishAttempts++
+            failPublish?.let { throw it }
+            if (book.shareId in takenShareIds) throw SocialException(SocialException.Kind.NOT_AVAILABLE, "not available")
+            onPublish()
+            published += book to before
         }
         override suspend fun unpublish(shareId: String) {
             check(); failPublish?.let { throw it }; unpublished += shareId
