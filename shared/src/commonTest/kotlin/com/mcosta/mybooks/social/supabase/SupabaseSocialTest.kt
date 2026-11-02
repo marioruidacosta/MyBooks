@@ -3,7 +3,24 @@ package com.mcosta.mybooks.social.supabase
 import com.mcosta.mybooks.MainDispatcherTest
 import com.mcosta.mybooks.social.SocialConfig
 import com.mcosta.mybooks.social.SocialException
+import com.mcosta.mybooks.domain.ReadingStatus
+import com.mcosta.mybooks.social.model.ActivityKind
+import com.mcosta.mybooks.social.model.FeedBook
+import com.mcosta.mybooks.social.model.FeedCursor
+import com.mcosta.mybooks.social.model.FeedScope
+import com.mcosta.mybooks.social.model.Person
+import com.mcosta.mybooks.social.model.PublicBookState
 import com.mcosta.mybooks.social.model.Relationship
+import com.mcosta.mybooks.social.model.ReportReason
+import com.mcosta.mybooks.social.model.Visibility
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
+import kotlin.test.assertNull
+import kotlin.time.Instant
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
@@ -121,5 +138,146 @@ class SupabaseSocialTest : MainDispatcherTest() {
         assertFalse(SocialConfig("", "").enabled)
         assertFalse(SocialConfig("https://x.supabase.co", " ").enabled)
         assertTrue(SocialConfig("https://x.supabase.co", "key").enabled)
+    }
+
+    private fun bodyOf(path: String) = requests.single { it.first.url.encodedPath == path }.second.replace(" ", "")
+
+    private val book = PublicBookState("s1", "9789726084884", "T", "A", null, ReadingStatus.WISHLIST, null, null, "")
+
+    @Test
+    fun publishSendsBookAndBefore() = runTest {
+        val social = social(mapOf("/rest/v1/rpc/publish_book" to listOf(204 to "")))
+        social.services.activity.publish(book, book.copy(status = ReadingStatus.READ, rating = 3))
+        val body = Json.parseToJsonElement(bodyOf("/rest/v1/rpc/publish_book"))
+        val expected = Json.parseToJsonElement(
+            """{"book":{"id":"s1","isbn":"9789726084884","title":"T","authors":"A","cover_url":null,"status":"to_buy",
+               |"rating":null,"progress":null,"review":""},"before":{"status":"read","rating":3,"progress":null,"review":""}}""".trimMargin()
+        )
+        assertEquals(expected, body)
+    }
+
+    @Test
+    fun publishWithoutBeforeSendsNull() = runTest {
+        val social = social(mapOf("/rest/v1/rpc/publish_book" to listOf(204 to "")))
+        social.services.activity.publish(book.copy(status = ReadingStatus.READING, progress = 40), null)
+        val body = Json.parseToJsonElement(bodyOf("/rest/v1/rpc/publish_book")).jsonObject
+        assertEquals(JsonNull, body["before"])
+        assertEquals("reading", body["book"]!!.jsonObject["status"]!!.jsonPrimitive.content)
+        assertEquals(40, body["book"]!!.jsonObject["progress"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun unpublishSendsId() = runTest {
+        val social = social(mapOf("/rest/v1/rpc/unpublish_book" to listOf(204 to "")))
+        social.services.activity.unpublish("s1")
+        assertEquals("""{"id":"s1"}""", bodyOf("/rest/v1/rpc/unpublish_book"))
+    }
+
+    @Test
+    fun feedSendsScopeAndCursor() = runTest {
+        val social = social(mapOf("/rest/v1/rpc/feed" to listOf(200 to "[]")))
+        val page = social.services.activity.feed(FeedScope.EVERYONE, FeedCursor(Instant.parse("2026-11-02T10:00:00Z"), 7))
+        val body = Json.parseToJsonElement(bodyOf("/rest/v1/rpc/feed")).jsonObject
+        assertEquals("everyone", body["scope"]!!.jsonPrimitive.content)
+        assertEquals(Instant.parse("2026-11-02T10:00:00Z"), Instant.parse(body["before_time"]!!.jsonPrimitive.content))
+        assertEquals(7L, body["before_id"]!!.jsonPrimitive.long)
+        assertEquals(20, body["max"]!!.jsonPrimitive.int)
+        assertTrue(page.entries.isEmpty())
+        assertNull(page.next)
+    }
+
+    private fun feedRow(id: Long, kind: String = "finished", review: String? = null) =
+        """{"id":$id,"kind":"$kind","rating":${if (kind == "rated") 4 else null},"progress":null,
+           |"created_at":"2026-11-02T10:${(id % 60).toString().padStart(2, '0')}:00+00:00",
+           |"actor_id":"id-bruno","username":"bruno","display_name":"Bruno","avatar_path":"id-bruno/avatar-1.jpg",
+           |"book_id":"s$id","isbn":null,"title":"Book $id","authors":"A","cover_url":null,
+           |"review":${review?.let { "\"$it\"" }},"like_count":2,"liked_by_me":true}""".trimMargin()
+
+    @Test
+    fun feedRowsMapToEntries() = runTest {
+        val rows = (40L downTo 21L).map { feedRow(it, kind = if (it == 40L) "reviewed" else "rated", review = if (it == 40L) "Great" else null) }
+        val social = social(mapOf("/rest/v1/rpc/feed" to listOf(200 to rows.joinToString(",", "[", "]"))))
+        val page = social.services.activity.feed(FeedScope.FRIENDS)
+        val first = page.entries.first()
+        assertEquals(ActivityKind.REVIEWED, first.kind)
+        assertEquals("Great", first.review)
+        assertEquals("bruno", first.actor.username)
+        assertEquals("$baseUrl/storage/v1/object/public/avatars/id-bruno/avatar-1.jpg", first.actor.avatarUrl)
+        assertEquals(FeedBook("s40", null, "Book 40", "A", null), first.book)
+        assertEquals(2, first.likeCount)
+        assertTrue(first.likedByMe)
+        assertEquals(ActivityKind.RATED, page.entries[1].kind)
+        assertEquals(4, page.entries[1].rating)
+        assertNull(page.entries[1].review)
+        assertEquals(FeedCursor(Instant.parse("2026-11-02T10:21:00Z"), 21), page.next)
+        assertEquals("friends", Json.parseToJsonElement(bodyOf("/rest/v1/rpc/feed")).jsonObject["scope"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun personActivitySendsPerson() = runTest {
+        val social = social(mapOf("/rest/v1/rpc/person_activity" to listOf(200 to "[${feedRow(1)}]")))
+        val page = social.services.activity.personActivity("id-bruno")
+        assertEquals(1, page.entries.size)
+        assertNull(page.next)
+        assertEquals("id-bruno", Json.parseToJsonElement(bodyOf("/rest/v1/rpc/person_activity")).jsonObject["person"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun likeOwnMapsToNotAvailable() = runTest {
+        val social = social(
+            mapOf("/rest/v1/rpc/like" to listOf(400 to """{"code":"P0002","message":"entry not available","details":null,"hint":null}"""))
+        )
+        val e = assertFailsWith<SocialException> { social.services.activity.like(12) }
+        assertEquals(SocialException.Kind.NOT_AVAILABLE, e.kind)
+        assertEquals("""{"activity":12}""", bodyOf("/rest/v1/rpc/like"))
+    }
+
+    @Test
+    fun unlikeSendsActivity() = runTest {
+        val social = social(mapOf("/rest/v1/rpc/unlike" to listOf(204 to "")))
+        social.services.activity.unlike(12)
+        assertEquals("""{"activity":12}""", bodyOf("/rest/v1/rpc/unlike"))
+    }
+
+    @Test
+    fun likersMapToPeople() = runTest {
+        val social = social(
+            mapOf("/rest/v1/rpc/likers" to listOf(200 to """[{"id":"id-ana","username":"ana","display_name":"Ana","avatar_path":null}]"""))
+        )
+        assertEquals(listOf(Person("id-ana", "ana", "Ana", null)), social.services.activity.likers(12))
+    }
+
+    @Test
+    fun setShareActivityCallsRpcAndReturnsProfile() = runTest {
+        val social = social(
+            mapOf(
+                "/rest/v1/rpc/set_share_activity" to listOf(204 to ""),
+                "/rest/v1/profiles" to listOf(
+                    200 to """[{"id":"me","username":"me","display_name":"Me","avatar_path":null,"visibility":"friends","share_activity":false}]""",
+                ),
+            )
+        )
+        val profile = social.services.profiles.setShareActivity(false)
+        assertFalse(profile.shareActivity)
+        assertEquals("""{"enabled":false}""", bodyOf("/rest/v1/rpc/set_share_activity"))
+    }
+
+    @Test
+    fun personCarriesVisibility() = runTest {
+        val social = social(
+            mapOf(
+                "/rest/v1/profiles" to listOf(
+                    200 to """[{"id":"id-carla","username":"carla","display_name":"Carla","avatar_path":null,"visibility":"public"}]""",
+                ),
+            )
+        )
+        assertEquals(Visibility.PUBLIC, social.services.profiles.person("id-carla")?.visibility)
+    }
+
+    @Test
+    fun reportSendsActivity() = runTest {
+        val social = social(mapOf("/rest/v1/reports" to listOf(201 to "")))
+        social.services.safety.report("id-bruno", ReportReason.SPAM, null, activityId = 12)
+        assertTrue(bodyOf("/rest/v1/reports").contains("\"activity\":12"), bodyOf("/rest/v1/reports"))
     }
 }

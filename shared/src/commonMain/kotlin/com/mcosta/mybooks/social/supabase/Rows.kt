@@ -1,11 +1,83 @@
 package com.mcosta.mybooks.social.supabase
 
+import com.mcosta.mybooks.domain.ReadingStatus
+import com.mcosta.mybooks.social.model.ActivityKind
+import com.mcosta.mybooks.social.model.FeedBook
+import com.mcosta.mybooks.social.model.FeedEntry
 import com.mcosta.mybooks.social.model.Person
 import com.mcosta.mybooks.social.model.Profile
+import com.mcosta.mybooks.social.model.PublicBookState
 import com.mcosta.mybooks.social.model.Relationship
 import com.mcosta.mybooks.social.model.Visibility
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.time.Instant
+
+/** A row of the feed / person_activity functions. */
+@Serializable
+internal data class FeedRow(
+    val id: Long,
+    val kind: String,
+    val rating: Int? = null,
+    val progress: Int? = null,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("actor_id") val actorId: String,
+    val username: String,
+    @SerialName("display_name") val displayName: String,
+    @SerialName("avatar_path") val avatarPath: String? = null,
+    @SerialName("book_id") val bookId: String,
+    val isbn: String? = null,
+    val title: String,
+    val authors: String = "",
+    @SerialName("cover_url") val coverUrl: String? = null,
+    val review: String? = null,
+    @SerialName("like_count") val likeCount: Int = 0,
+    @SerialName("liked_by_me") val likedByMe: Boolean = false,
+)
+
+internal fun FeedRow.toEntry(avatarUrl: (String?) -> String?) = FeedEntry(
+    id = id,
+    actor = Person(actorId, username, displayName, avatarUrl(avatarPath)),
+    kind = ActivityKind.valueOf(kind.uppercase()),
+    rating = rating,
+    progress = progress,
+    createdAt = Instant.parse(createdAt),
+    book = FeedBook(bookId, isbn, title, authors, coverUrl),
+    review = review,
+    likeCount = likeCount,
+    likedByMe = likedByMe,
+)
+
+internal fun ReadingStatus.dbValue() = when (this) {
+    ReadingStatus.READING -> "reading"
+    ReadingStatus.READ -> "read"
+    ReadingStatus.TO_READ -> "to_read"
+    ReadingStatus.WISHLIST -> "to_buy"
+}
+
+/** publish_book's `book` argument. */
+internal fun PublicBookState.toBookJson(): JsonObject = buildJsonObject {
+    put("id", shareId)
+    put("isbn", isbn)
+    put("title", title)
+    put("authors", authors)
+    put("cover_url", coverUrl)
+    put("status", status.dbValue())
+    put("rating", rating)
+    put("progress", progress)
+    put("review", review)
+}
+
+/** publish_book's `before` argument: only the fields that decide which entries are created. */
+internal fun PublicBookState.toBeforeJson(): JsonObject = buildJsonObject {
+    put("status", status.dbValue())
+    put("rating", rating)
+    put("progress", progress)
+    put("review", review)
+}
 
 /** Rows as PostgREST returns them (column names from supabase/migrations). */
 @Serializable
@@ -15,6 +87,7 @@ internal data class ProfileRow(
     @SerialName("display_name") val displayName: String,
     @SerialName("avatar_path") val avatarPath: String? = null,
     val visibility: String = "friends",
+    @SerialName("share_activity") val shareActivity: Boolean = true,
 )
 
 @Serializable
@@ -28,16 +101,23 @@ internal data class NewProfileRow(
 internal data class FriendshipRow(val requester: String, val addressee: String, val status: String)
 
 @Serializable
-internal data class NewReportRow(val reporter: String, val reported: String, val reason: String, val details: String?)
+internal data class NewReportRow(
+    val reporter: String,
+    val reported: String,
+    val reason: String,
+    val details: String?,
+    val activity: Long? = null,
+)
 
 internal fun visibilityOf(value: String) = if (value == "public") Visibility.PUBLIC else Visibility.FRIENDS
 
 internal fun Visibility.dbValue() = if (this == Visibility.PUBLIC) "public" else "friends"
 
 internal fun ProfileRow.toProfile(avatarUrl: (String?) -> String?) =
-    Profile(id, username, displayName, avatarUrl(avatarPath), visibilityOf(visibility))
+    Profile(id, username, displayName, avatarUrl(avatarPath), visibilityOf(visibility), shareActivity)
 
-internal fun ProfileRow.toPerson(avatarUrl: (String?) -> String?) = Person(id, username, displayName, avatarUrl(avatarPath))
+internal fun ProfileRow.toPerson(avatarUrl: (String?) -> String?) =
+    Person(id, username, displayName, avatarUrl(avatarPath), visibilityOf(visibility))
 
 /** How [me] relates to [other], from the friendship rows visible to me. */
 internal fun relationshipFrom(rows: List<FriendshipRow>, me: String, other: String): Relationship {

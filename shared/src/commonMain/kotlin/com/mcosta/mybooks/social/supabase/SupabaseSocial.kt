@@ -8,6 +8,7 @@ import com.mcosta.mybooks.social.SafetyService
 import com.mcosta.mybooks.social.SocialConfig
 import com.mcosta.mybooks.social.SocialException
 import com.mcosta.mybooks.social.SocialServices
+import com.mcosta.mybooks.social.model.FEED_PAGE_SIZE
 import com.mcosta.mybooks.social.model.FeedCursor
 import com.mcosta.mybooks.social.model.FeedPage
 import com.mcosta.mybooks.social.model.FeedScope
@@ -53,6 +54,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.io.IOException
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlin.time.Clock
@@ -205,7 +208,10 @@ internal class SupabaseSocial(
             updated.toProfile(::avatarUrl)
         }
 
-        override suspend fun setShareActivity(enabled: Boolean): Profile = TODO("social part 2, task 3")
+        override suspend fun setShareActivity(enabled: Boolean): Profile = call {
+            client.postgrest.rpc("set_share_activity", buildJsonObject { put("enabled", enabled) })
+            client.from("profiles").select { filter { eq("id", me()) } }.decodeSingle<ProfileRow>().toProfile(::avatarUrl)
+        }
 
         override suspend fun person(userId: String): Person? = call {
             client.from("profiles").select { filter { eq("id", userId) } }.decodeSingleOrNull<ProfileRow>()?.toPerson(::avatarUrl)
@@ -311,20 +317,72 @@ internal class SupabaseSocial(
         }
 
         override suspend fun report(userId: String, reason: ReportReason, details: String?, activityId: Long?) = call {
-            client.from("reports").insert(NewReportRow(me(), userId, reason.name.lowercase(), details?.trim()?.ifEmpty { null }))
+            client.from("reports").insert(
+                NewReportRow(me(), userId, reason.name.lowercase(), details?.trim()?.ifEmpty { null }, activityId)
+            )
             Unit
         }
     }
 
+    private fun page(rows: List<FeedRow>): FeedPage {
+        val entries = rows.map { it.toEntry(::avatarUrl) }
+        val next = entries.takeIf { it.size >= FEED_PAGE_SIZE }?.last()?.let { FeedCursor(it.createdAt, it.id) }
+        return FeedPage(entries, next)
+    }
+
+    private fun JsonObjectBuilder.putCursor(cursor: FeedCursor?) {
+        put("before_time", cursor?.createdAt?.toString())
+        put("before_id", cursor?.id)
+        put("max", FEED_PAGE_SIZE)
+    }
+
     private val activity: ActivityService = object : ActivityService {
-        override suspend fun publish(book: PublicBookState, before: PublicBookState?) = TODO("social part 2, task 3")
-        override suspend fun unpublish(shareId: String) = TODO("social part 2, task 3")
-        override suspend fun unpublishAll() = TODO("social part 2, task 3")
-        override suspend fun feed(scope: FeedScope, cursor: FeedCursor?): FeedPage = TODO("social part 2, task 3")
-        override suspend fun personActivity(userId: String, cursor: FeedCursor?): FeedPage = TODO("social part 2, task 3")
-        override suspend fun like(activityId: Long) = TODO("social part 2, task 3")
-        override suspend fun unlike(activityId: Long) = TODO("social part 2, task 3")
-        override suspend fun likers(activityId: Long): List<Person> = TODO("social part 2, task 3")
+        override suspend fun publish(book: PublicBookState, before: PublicBookState?) = call {
+            client.postgrest.rpc("publish_book", buildJsonObject {
+                put("book", book.toBookJson())
+                put("before", before?.toBeforeJson() ?: JsonNull)
+            })
+            Unit
+        }
+
+        override suspend fun unpublish(shareId: String) = call {
+            client.postgrest.rpc("unpublish_book", buildJsonObject { put("id", shareId) })
+            Unit
+        }
+
+        override suspend fun unpublishAll() = call {
+            client.postgrest.rpc("unpublish_all")
+            Unit
+        }
+
+        override suspend fun feed(scope: FeedScope, cursor: FeedCursor?): FeedPage = call {
+            page(client.postgrest.rpc("feed", buildJsonObject {
+                put("scope", scope.name.lowercase())
+                putCursor(cursor)
+            }).decodeList<FeedRow>())
+        }
+
+        override suspend fun personActivity(userId: String, cursor: FeedCursor?): FeedPage = call {
+            page(client.postgrest.rpc("person_activity", buildJsonObject {
+                put("person", userId)
+                putCursor(cursor)
+            }).decodeList<FeedRow>())
+        }
+
+        override suspend fun like(activityId: Long) = call {
+            client.postgrest.rpc("like", buildJsonObject { put("activity", activityId) })
+            Unit
+        }
+
+        override suspend fun unlike(activityId: Long) = call {
+            client.postgrest.rpc("unlike", buildJsonObject { put("activity", activityId) })
+            Unit
+        }
+
+        override suspend fun likers(activityId: Long): List<Person> = call {
+            client.postgrest.rpc("likers", buildJsonObject { put("activity", activityId) })
+                .decodeList<ProfileRow>().map { it.toPerson(::avatarUrl) }
+        }
     }
 
     val services = SocialServices(auth, profiles, friends, safety, activity)
