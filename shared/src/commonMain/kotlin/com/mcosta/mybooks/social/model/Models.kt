@@ -21,10 +21,18 @@ data class Profile(
     val displayName: String,
     val avatarUrl: String?,
     val visibility: Visibility,
+    /** Whether book changes are shared automatically ("Share my reading activity"). */
+    val shareActivity: Boolean = true,
 )
 
 /** Another person, as shown in lists, search results and profile pages. */
-data class Person(val id: String, val username: String, val displayName: String, val avatarUrl: String?)
+data class Person(
+    val id: String,
+    val username: String,
+    val displayName: String,
+    val avatarUrl: String?,
+    val visibility: Visibility = Visibility.FRIENDS,
+)
 
 data class SearchResult(val person: Person, val relationship: Relationship)
 

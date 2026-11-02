@@ -1,5 +1,6 @@
 package com.mcosta.mybooks.social.supabase
 
+import com.mcosta.mybooks.social.ActivityService
 import com.mcosta.mybooks.social.AuthService
 import com.mcosta.mybooks.social.FriendsService
 import com.mcosta.mybooks.social.ProfileService
@@ -7,7 +8,11 @@ import com.mcosta.mybooks.social.SafetyService
 import com.mcosta.mybooks.social.SocialConfig
 import com.mcosta.mybooks.social.SocialException
 import com.mcosta.mybooks.social.SocialServices
+import com.mcosta.mybooks.social.model.FeedCursor
+import com.mcosta.mybooks.social.model.FeedPage
+import com.mcosta.mybooks.social.model.FeedScope
 import com.mcosta.mybooks.social.model.Person
+import com.mcosta.mybooks.social.model.PublicBookState
 import com.mcosta.mybooks.social.model.Profile
 import com.mcosta.mybooks.social.model.Relationship
 import com.mcosta.mybooks.social.model.ReportReason
@@ -200,6 +205,8 @@ internal class SupabaseSocial(
             updated.toProfile(::avatarUrl)
         }
 
+        override suspend fun setShareActivity(enabled: Boolean): Profile = TODO("social part 2, task 3")
+
         override suspend fun person(userId: String): Person? = call {
             client.from("profiles").select { filter { eq("id", userId) } }.decodeSingleOrNull<ProfileRow>()?.toPerson(::avatarUrl)
         }
@@ -303,11 +310,22 @@ internal class SupabaseSocial(
             client.postgrest.rpc("my_blocked_profiles").decodeList<ProfileRow>().map { it.toPerson(::avatarUrl) }
         }
 
-        override suspend fun report(userId: String, reason: ReportReason, details: String?) = call {
+        override suspend fun report(userId: String, reason: ReportReason, details: String?, activityId: Long?) = call {
             client.from("reports").insert(NewReportRow(me(), userId, reason.name.lowercase(), details?.trim()?.ifEmpty { null }))
             Unit
         }
     }
 
-    val services = SocialServices(auth, profiles, friends, safety)
+    private val activity: ActivityService = object : ActivityService {
+        override suspend fun publish(book: PublicBookState, before: PublicBookState?) = TODO("social part 2, task 3")
+        override suspend fun unpublish(shareId: String) = TODO("social part 2, task 3")
+        override suspend fun unpublishAll() = TODO("social part 2, task 3")
+        override suspend fun feed(scope: FeedScope, cursor: FeedCursor?): FeedPage = TODO("social part 2, task 3")
+        override suspend fun personActivity(userId: String, cursor: FeedCursor?): FeedPage = TODO("social part 2, task 3")
+        override suspend fun like(activityId: Long) = TODO("social part 2, task 3")
+        override suspend fun unlike(activityId: Long) = TODO("social part 2, task 3")
+        override suspend fun likers(activityId: Long): List<Person> = TODO("social part 2, task 3")
+    }
+
+    val services = SocialServices(auth, profiles, friends, safety, activity)
 }

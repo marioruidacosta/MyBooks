@@ -1,7 +1,15 @@
 package com.mcosta.mybooks.social
 
+import com.mcosta.mybooks.social.model.ActivityKind
+import com.mcosta.mybooks.social.model.FEED_PAGE_SIZE
+import com.mcosta.mybooks.social.model.FeedBook
+import com.mcosta.mybooks.social.model.FeedCursor
+import com.mcosta.mybooks.social.model.FeedEntry
+import com.mcosta.mybooks.social.model.FeedPage
+import com.mcosta.mybooks.social.model.FeedScope
 import com.mcosta.mybooks.social.model.Person
 import com.mcosta.mybooks.social.model.Profile
+import com.mcosta.mybooks.social.model.PublicBookState
 import com.mcosta.mybooks.social.model.Relationship
 import com.mcosta.mybooks.social.model.ReportReason
 import com.mcosta.mybooks.social.model.SearchResult
@@ -9,13 +17,26 @@ import com.mcosta.mybooks.social.model.SessionState
 import com.mcosta.mybooks.social.model.Visibility
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlin.time.Instant
 
 /**
- * In-memory social network following the same rules as the SQL migration: mutual requests,
- * crossed requests become friends, blocks remove friendships and hide people both ways.
+ * In-memory social network following the same rules as the SQL migrations: mutual requests,
+ * crossed requests become friends, blocks remove friendships and hide people both ways, and
+ * activity is visible to the actor, their friends, and everyone when the actor is public.
  */
 class FakeSocial {
-    data class Report(val reporter: String, val reported: String, val reason: ReportReason, val details: String?)
+    data class Report(val reporter: String, val reported: String, val reason: ReportReason, val details: String?, val activityId: Long? = null)
+
+    /** A seeded feed entry (the fake doesn't derive entries from published states). */
+    private data class Entry(val id: Long, val actor: String, val kind: ActivityKind, val title: String, val isbn: String?)
+
+    private val entries = mutableListOf<Entry>()
+    private val likes = mutableSetOf<Pair<Long, String>>()      // entry id -> liker
+    val published = mutableListOf<Pair<PublicBookState, PublicBookState?>>()
+    val unpublished = mutableListOf<String>()
+    var unpublishedAll = 0
+    /** Thrown by publish/unpublish when set (e.g. to simulate a failed upload). */
+    var failPublish: SocialException? = null
 
     private val profiles = linkedMapOf<String, Profile>()
     private val emails = mutableMapOf<String, String>()          // email -> user id
@@ -52,7 +73,45 @@ class FakeSocial {
 
     private fun blockedBetween(a: String, b: String) = (a to b) in blocks || (b to a) in blocks
 
-    private fun person(p: Profile) = Person(p.id, p.username, p.displayName, p.avatarUrl)
+    private fun person(p: Profile) = Person(p.id, p.username, p.displayName, p.avatarUrl, p.visibility)
+
+    fun setVisibility(userId: String, visibility: Visibility) {
+        profiles[userId] = profiles.getValue(userId).copy(visibility = visibility)
+    }
+
+    fun makeFriends(a: String, b: String) {
+        friendsSet += setOf(a, b)
+    }
+
+    /** Adds a feed entry by [actorId]; entries added later are newer. Returns its id. */
+    fun addEntry(actorId: String, kind: ActivityKind, title: String = "Book", isbn: String? = null): Long {
+        val id = entries.size + 1L
+        entries += Entry(id, actorId, kind, title, isbn)
+        return id
+    }
+
+    private fun canSeeActivityOf(me: String, actor: String): Boolean = actor == me ||
+        (!blockedBetween(me, actor) && (profiles[actor]?.visibility == Visibility.PUBLIC || setOf(me, actor) in friendsSet))
+
+    private fun toFeedEntry(e: Entry, me: String) = FeedEntry(
+        id = e.id,
+        actor = person(profiles.getValue(e.actor)),
+        kind = e.kind,
+        rating = if (e.kind == ActivityKind.RATED) 4 else null,
+        progress = if (e.kind == ActivityKind.PROGRESS) 50 else null,
+        createdAt = Instant.fromEpochSeconds(1_800_000_000L + e.id * 60),
+        book = FeedBook("share-${e.id}", e.isbn, e.title, "Author", null),
+        review = if (e.kind == ActivityKind.REVIEWED) "A review" else null,
+        likeCount = likes.count { it.first == e.id },
+        likedByMe = (e.id to me) in likes,
+    )
+
+    private fun page(visible: List<Entry>, cursor: FeedCursor?, me: String): FeedPage {
+        val newestFirst = visible.sortedByDescending { it.id }.filter { cursor == null || it.id < cursor.id }
+        val items = newestFirst.take(FEED_PAGE_SIZE).map { toFeedEntry(it, me) }
+        val next = items.takeIf { it.size == FEED_PAGE_SIZE }?.last()?.let { FeedCursor(it.createdAt, it.id) }
+        return FeedPage(items, next)
+    }
 
     private fun relationshipOf(me: String, other: String) = when {
         setOf(me, other) in friendsSet -> Relationship.FRIENDS
@@ -93,6 +152,12 @@ class FakeSocial {
         override suspend fun uploadAvatar(jpeg: ByteArray): Profile {
             check(); uploadedAvatars += jpeg
             return profiles.getValue(me()).copy(avatarUrl = "https://avatars/${me()}.jpg").also { profiles[it.id] = it }
+        }
+        override suspend fun setShareActivity(enabled: Boolean): Profile {
+            check()
+            val me = me()
+            if (!enabled) entries.removeAll { it.actor == me }
+            return profiles.getValue(me).copy(shareActivity = enabled).also { profiles[it.id] = it }
         }
         override suspend fun person(userId: String): Person? {
             check(); return profiles[userId]?.takeUnless { blockedBetween(me(), userId) }?.let(::person)
@@ -165,10 +230,58 @@ class FakeSocial {
         override suspend fun blockedPeople(): List<Person> {
             check(); val me = me(); return blocks.filter { it.first == me }.mapNotNull { profiles[it.second]?.let(::person) }
         }
-        override suspend fun report(userId: String, reason: ReportReason, details: String?) {
-            check(); reports += Report(me(), userId, reason, details)
+        override suspend fun report(userId: String, reason: ReportReason, details: String?, activityId: Long?) {
+            check(); reports += Report(me(), userId, reason, details, activityId)
         }
     }
 
-    val services = SocialServices(auth, profileService, friendsService, safetyService)
+    val activityService = object : ActivityService {
+        override suspend fun publish(book: PublicBookState, before: PublicBookState?) {
+            check(); failPublish?.let { throw it }; published += book to before
+        }
+        override suspend fun unpublish(shareId: String) {
+            check(); failPublish?.let { throw it }; unpublished += shareId
+        }
+        override suspend fun unpublishAll() {
+            check(); unpublishedAll++
+        }
+        override suspend fun feed(scope: FeedScope, cursor: FeedCursor?): FeedPage {
+            check()
+            val me = me()
+            val visible = entries.filter { e ->
+                !blockedBetween(me, e.actor) && when (scope) {
+                    FeedScope.FRIENDS -> e.actor == me || setOf(me, e.actor) in friendsSet
+                    FeedScope.EVERYONE -> profiles[e.actor]?.visibility == Visibility.PUBLIC
+                }
+            }
+            return page(visible, cursor, me)
+        }
+        override suspend fun personActivity(userId: String, cursor: FeedCursor?): FeedPage {
+            check()
+            val me = me()
+            return page(if (canSeeActivityOf(me, userId)) entries.filter { it.actor == userId } else emptyList(), cursor, me)
+        }
+        override suspend fun like(activityId: Long) {
+            check()
+            val me = me()
+            val e = entries.firstOrNull { it.id == activityId }
+            if (e == null || e.actor == me || !canSeeActivityOf(me, e.actor)) {
+                throw SocialException(SocialException.Kind.NOT_AVAILABLE, "not available")
+            }
+            likes += activityId to me
+        }
+        override suspend fun unlike(activityId: Long) {
+            check(); likes -= activityId to me()
+        }
+        override suspend fun likers(activityId: Long): List<Person> {
+            check()
+            val me = me()
+            val e = entries.firstOrNull { it.id == activityId } ?: return emptyList()
+            if (!canSeeActivityOf(me, e.actor)) return emptyList()
+            return likes.filter { it.first == activityId && !blockedBetween(me, it.second) }
+                .mapNotNull { profiles[it.second]?.let(::person) }
+        }
+    }
+
+    val services = SocialServices(auth, profileService, friendsService, safetyService, activityService)
 }

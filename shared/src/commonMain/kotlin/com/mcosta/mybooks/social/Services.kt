@@ -1,6 +1,10 @@
 package com.mcosta.mybooks.social
 
+import com.mcosta.mybooks.social.model.FeedCursor
+import com.mcosta.mybooks.social.model.FeedPage
+import com.mcosta.mybooks.social.model.FeedScope
 import com.mcosta.mybooks.social.model.Person
+import com.mcosta.mybooks.social.model.PublicBookState
 import com.mcosta.mybooks.social.model.Profile
 import com.mcosta.mybooks.social.model.Relationship
 import com.mcosta.mybooks.social.model.ReportReason
@@ -29,6 +33,8 @@ interface ProfileService {
     suspend fun createProfile(username: String, displayName: String): Profile
     suspend fun updateProfile(displayName: String, visibility: Visibility): Profile
     suspend fun uploadAvatar(jpeg: ByteArray): Profile
+    /** Turns automatic sharing on or off; off also removes everything shared, on the server. */
+    suspend fun setShareActivity(enabled: Boolean): Profile
     /** Another person, or null if they don't exist or a block hides them. */
     suspend fun person(userId: String): Person?
     /** Deletes the community account (avatar, profile, friendships); the local library is untouched. */
@@ -53,7 +59,23 @@ interface SafetyService {
     suspend fun block(userId: String)
     suspend fun unblock(userId: String)
     suspend fun blockedPeople(): List<Person>
-    suspend fun report(userId: String, reason: ReportReason, details: String?)
+    /** [activityId]: the feed entry being reported, if any. */
+    suspend fun report(userId: String, reason: ReportReason, details: String?, activityId: Long? = null)
+}
+
+/** Shared book activity: publishing (by the phone, automatically) and the feed. */
+interface ActivityService {
+    /** Uploads a book's public state; [before] is its state before the first shared change (null for a new book). */
+    suspend fun publish(book: PublicBookState, before: PublicBookState?)
+    /** Removes a shared book and its entries. Unknown ids are not an error. */
+    suspend fun unpublish(shareId: String)
+    suspend fun unpublishAll()
+    suspend fun feed(scope: FeedScope, cursor: FeedCursor? = null): FeedPage
+    /** One person's entries; empty when the caller may not see them. */
+    suspend fun personActivity(userId: String, cursor: FeedCursor? = null): FeedPage
+    suspend fun like(activityId: Long)
+    suspend fun unlike(activityId: Long)
+    suspend fun likers(activityId: Long): List<Person>
 }
 
 class SocialServices(
@@ -61,4 +83,5 @@ class SocialServices(
     val profiles: ProfileService,
     val friends: FriendsService,
     val safety: SafetyService,
+    val activity: ActivityService,
 )
