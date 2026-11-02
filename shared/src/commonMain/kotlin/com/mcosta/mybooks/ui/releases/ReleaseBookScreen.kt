@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.ui.components.BookCover
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +48,8 @@ fun ReleaseBookScreen(viewModel: ReleaseBookViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val uri = LocalUriHandler.current
+    val scope = rememberCoroutineScope()
+    val cantOpen = { scope.launch { snackbar.showSnackbar("No app on this phone can open the link") }; Unit }
     LaunchedEffect(state.message) {
         state.message?.let { snackbar.showSnackbar(it); viewModel.dismissMessage() }
     }
@@ -98,13 +102,13 @@ fun ReleaseBookScreen(viewModel: ReleaseBookViewModel, onBack: () -> Unit) {
             HorizontalDivider()
             Text("Where to buy", style = MaterialTheme.typography.titleSmall)
             state.stores.forEach { store ->
-                OutlinedButton(onClick = { uri.openUri(store.url) }, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { if (!uri.tryOpen(store.url)) cantOpen() }, modifier = Modifier.fillMaxWidth()) {
                     Text(store.name, modifier = Modifier.weight(1f))
                     Icon(Icons.AutoMirrored.Filled.OpenInNew, null)
                 }
             }
             book.link?.let { link ->
-                TextButton(onClick = { uri.openUri(link) }) { Text("View at the National Library") }
+                TextButton(onClick = { if (!uri.tryOpen(link)) cantOpen() }) { Text("View at the National Library") }
             }
         }
     }

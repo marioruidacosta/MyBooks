@@ -20,10 +20,12 @@ import kotlin.test.assertTrue
 class FakeOaiSource(private val records: List<MarcRecord>, private val pageSize: Int = 5) : OaiSource {
     val calls = mutableListOf<Pair<LocalDate, LocalDate>>()
     var failOnCall: Int? = null
+    /** Every call from this one on fails (a lasting outage). */
+    var failFromCall: Int? = null
 
     override fun page(from: LocalDate, until: LocalDate, resumptionToken: String?): OaiPage {
         calls += from to until
-        if (failOnCall == calls.size) throw IOException("library down")
+        if (failOnCall == calls.size || (failFromCall ?: Int.MAX_VALUE) <= calls.size) throw IOException("library down")
         val inWindow = records.filter { LocalDate.parse(it.datestamp) in from..until }
         val start = resumptionToken?.toInt() ?: 0
         val end = minOf(start + pageSize, inWindow.size)
@@ -110,8 +112,8 @@ class ReleasesJobTest {
         store.write(JobState("2026-10-31"), setOf("1"), emptyMap(), IndexFile(updated = "x", months = emptyList()), emptyList())
         val before = dir.resolve("state.json").readText() to dir.resolve("seen.txt").readText()
         val source = FakeOaiSource(books(*listOf("2293200", "2290561", "2291160", "2290897", "2291019", "2290983").map { it to "2026-11-01" }.toTypedArray()))
-        source.failOnCall = 2
-        assertFailsWith<IOException> { job(source).run() }
+        source.failFromCall = 2
+        assertFailsWith<IOException> { ReleasesJob(source, store, LocalDate.parse("2026-11-03"), now, retryDelay = {}).run() }
         assertEquals(before, dir.resolve("state.json").readText() to dir.resolve("seen.txt").readText())
         assertFalse(dir.resolve("releases/2026-11.json").exists())
     }
@@ -140,6 +142,38 @@ class ReleasesJobTest {
         assertEquals(listOf("2290561"), idsIn("2026-11"))
         assertTrue("2290561" in store.seen())
     }
+    @Test
+    fun currentMonthListedOnTheFirst() {
+        val old = listOf("2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10")
+            .associateWith { MonthFile(month = it, updated = "x", books = emptyList()) }
+        store.write(JobState("2026-11-30"), emptySet(), old + ("2026-11" to MonthFile(month = "2026-11", updated = "x", books = emptyList())),
+            IndexFile(updated = "x", months = emptyList()), emptyList())
+        job(FakeOaiSource(emptyList()), today = "2026-12-01").run()
+        val index = store.index()!!
+        assertEquals("2026-12", index.months.first().month)
+        assertFalse(index.months.first().complete)
+        assertEquals(7, index.months.size)
+        assertEquals(listOf("2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12"), store.months())
+    }
+
+    @Test
+    fun transientFailureIsRetried() {
+        store.write(JobState("2026-11-01"), emptySet(), emptyMap(), IndexFile(updated = "x", months = emptyList()), emptyList())
+        val source = FakeOaiSource(books("2293200" to "2026-11-02"))
+        source.failOnCall = 1
+        ReleasesJob(source, store, LocalDate.parse("2026-11-03"), now, retryDelay = {}).run()
+        assertEquals(listOf("2293200"), idsIn("2026-11"))
+    }
+
+    @Test
+    fun repeatedTokenFails() {
+        store.write(JobState("2026-11-01"), emptySet(), emptyMap(), IndexFile(updated = "x", months = emptyList()), emptyList())
+        val stuck = object : OaiSource {
+            override fun page(from: LocalDate, until: LocalDate, resumptionToken: String?) = OaiPage(emptyList(), "same")
+        }
+        assertFailsWith<OaiException> { ReleasesJob(stuck, store, LocalDate.parse("2026-11-03"), now, retryDelay = {}).run() }
+        assertEquals("2026-11-01", store.state()!!.harvestedUntil)
+    }
 }
 
 class DataStoreTest {
@@ -162,4 +196,5 @@ class DataStoreTest {
         store.write(JobState("2026-11-01"), setOf("1"), emptyMap(), index, remove = listOf("2026-10"))
         assertEquals(emptyList(), store.months())
     }
+
 }

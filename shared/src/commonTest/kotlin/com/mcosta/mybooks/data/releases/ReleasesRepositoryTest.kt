@@ -9,6 +9,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.io.IOException
 import okio.Path.Companion.toPath
+import okio.ForwardingFileSystem
 import okio.fakefilesystem.FakeFileSystem
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -143,5 +144,34 @@ class ReleasesRepositoryTest {
     fun monthLabelSoFar() {
         assertEquals("November 2026 (so far)", monthLabel("2026-11", complete = false))
         assertEquals("October 2026", monthLabel("2026-10", complete = true))
+    }
+
+    @Test
+    fun invalidDownloadFallsBackToSavedCopy() = runTest {
+        val first = repo.months()
+        now += 7.hours
+        files["index.json"] = "<html>Wi-Fi login</html>"
+        val cached = repo.months()
+        assertTrue(cached.offline)
+        assertEquals(first.value, cached.value)
+    }
+
+    @Test
+    fun saveFailureStillReturnsDownload() = runTest {
+        val broken = object : ForwardingFileSystem(FakeFileSystem()) {
+            override fun sink(file: okio.Path, mustCreate: Boolean): okio.Sink = throw okio.IOException("disk full")
+        }
+        val r = ReleasesRepository(ReleasesClient(HttpClient(engine) { expectSuccess = false }, base), broken, "/releases".toPath(), { now })
+        assertEquals("2026-10", r.months().value.single().month)
+    }
+
+    @Test
+    fun unreadableSavedCopyIsIgnored() = runTest {
+        val broken = object : ForwardingFileSystem(FakeFileSystem()) {
+            override fun source(file: okio.Path): okio.Source = throw okio.IOException("bad sector")
+            override fun metadataOrNull(path: okio.Path) = okio.FileMetadata(isRegularFile = true)
+        }
+        val r = ReleasesRepository(ReleasesClient(HttpClient(engine) { expectSuccess = false }, base), broken, "/releases".toPath(), { now })
+        assertEquals("2026-10", r.months().value.single().month)
     }
 }

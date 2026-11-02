@@ -11,13 +11,7 @@ on:
     paths: ["releases/**", ".github/workflows/releases.yml"]
 
 permissions:
-  contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: releases-job
-  cancel-in-progress: false
+  contents: read
 
 jobs:
   test:
@@ -36,6 +30,14 @@ jobs:
   publish:
     needs: test
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Only the publishing job can write; one at a time, never cancelled by a newer run.
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    concurrency:
+      group: releases-publish
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment:

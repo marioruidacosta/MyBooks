@@ -15,5 +15,8 @@ class Isbn13Test {
     fun badCheckDigitIsNull() = assertNull(isbn13("978-989-568-279-0"))
 
     @Test
+    fun nonBooklandEanIsNull() = assertNull(isbn13("4006381333931"))
+
+    @Test
     fun countryCodeIsNull() = assertNull(isbn13("PT"))
 }
