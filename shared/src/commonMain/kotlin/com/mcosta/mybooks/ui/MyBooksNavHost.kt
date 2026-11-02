@@ -14,6 +14,14 @@ import com.mcosta.mybooks.AppContainer
 import com.mcosta.mybooks.platform.ScanOutcome
 import com.mcosta.mybooks.share.SharingState
 import com.mcosta.mybooks.social.model.SessionState
+import com.mcosta.mybooks.data.releases.ReleaseGenre
+import com.mcosta.mybooks.data.releases.monthLabel
+import com.mcosta.mybooks.ui.releases.ReleaseBookScreen
+import com.mcosta.mybooks.ui.releases.ReleaseBookViewModel
+import com.mcosta.mybooks.ui.releases.ReleaseGenreScreen
+import com.mcosta.mybooks.ui.releases.ReleaseGenreViewModel
+import com.mcosta.mybooks.ui.releases.ReleasesScreen
+import com.mcosta.mybooks.ui.releases.ReleasesViewModel
 import com.mcosta.mybooks.ui.social.AccountRoute
 import com.mcosta.mybooks.ui.social.ActivityScreen
 import com.mcosta.mybooks.ui.social.ActivityViewModel
@@ -40,6 +48,9 @@ object Routes {
     const val SETTINGS = "settings"
     const val FRIENDS = "friends?tab={tab}"
     const val ACTIVITY = "activity"
+    const val RELEASES = "releases"
+    const val RELEASE_GENRE = "releases/{month}/{genre}"
+    const val RELEASE_BOOK = "releases/{month}/book/{id}"
     const val PROFILE = "profile/{id}"
     const val ACCOUNT = "account"
 
@@ -48,6 +59,8 @@ object Routes {
     fun book(id: Long) = "book/$id"
     fun profile(userId: String) = "profile/$userId"
     fun friends(tab: Int = 0) = "friends?tab=$tab"
+    fun releaseGenre(month: String, genre: String) = "releases/$month/$genre"
+    fun releaseBook(month: String, id: String) = "releases/$month/book/$id"
 }
 
 @Composable
@@ -83,6 +96,7 @@ fun MyBooksNavHost(container: AppContainer) {
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                 onOpenFriends = social?.let { { nav.navigate(Routes.friends()) } },
                 onOpenActivity = social?.let { { nav.navigate(Routes.ACTIVITY) } },
+                onOpenReleases = { nav.navigate(Routes.RELEASES) },
             )
         }
         composable(
@@ -107,6 +121,39 @@ fun MyBooksNavHost(container: AppContainer) {
                 onBack = { nav.popBackStack() },
                 onEdit = { nav.navigate(Routes.edit(id)) },
                 sharing = sharing,
+            )
+        }
+        composable(Routes.RELEASES) {
+            ReleasesScreen(
+                viewModel = viewModel { ReleasesViewModel(container.releases) },
+                onBack = { nav.popBackStack() },
+                onOpenGenre = { month, genre -> nav.navigate(Routes.releaseGenre(month, genre.key)) },
+            )
+        }
+        composable(
+            Routes.RELEASE_GENRE,
+            arguments = listOf(navArgument("month") { type = NavType.StringType }, navArgument("genre") { type = NavType.StringType }),
+        ) { entry ->
+            val month = entry.savedStateHandle.get<String>("month")!!
+            val genre = ReleaseGenre.of(entry.savedStateHandle.get<String>("genre")!!)
+            val complete = month < currentMonth()
+            ReleaseGenreScreen(
+                viewModel = viewModel { ReleaseGenreViewModel(container.releases, month, genre) },
+                title = genre.label,
+                subtitle = monthLabel(month, complete),
+                onBack = { nav.popBackStack() },
+                onOpenBook = { id -> nav.navigate(Routes.releaseBook(month, id)) },
+            )
+        }
+        composable(
+            Routes.RELEASE_BOOK,
+            arguments = listOf(navArgument("month") { type = NavType.StringType }, navArgument("id") { type = NavType.StringType }),
+        ) { entry ->
+            val month = entry.savedStateHandle.get<String>("month")!!
+            val id = entry.savedStateHandle.get<String>("id")!!
+            ReleaseBookScreen(
+                viewModel = viewModel { ReleaseBookViewModel(container.releases, container.repository, month, id) },
+                onBack = { nav.popBackStack() },
             )
         }
         composable(Routes.SETTINGS) {

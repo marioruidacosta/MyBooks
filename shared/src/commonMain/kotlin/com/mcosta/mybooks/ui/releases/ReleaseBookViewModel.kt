@@ -53,7 +53,7 @@ class ReleaseBookViewModel(
                 it.copy(
                     book = book,
                     loaded = true,
-                    coverUrl = "https://covers.openlibrary.org/b/isbn/${book.isbn}-M.jpg?default=false",
+                    coverUrl = openLibraryCover(book.isbn),
                     stores = storeLinks(book.isbn),
                     inLibrary = shelf.contains(book.isbn, book.title, book.authors.joinToString(", ")),
                 )
