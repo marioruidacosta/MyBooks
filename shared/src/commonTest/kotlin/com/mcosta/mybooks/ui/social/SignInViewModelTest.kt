@@ -161,4 +161,16 @@ class SignInViewModelTest : MainDispatcherTest() {
         assertEquals("You're offline", vm.state.value.error)
         assertEquals(SignInStep.EMAIL, vm.state.value.step)
     }
+
+    @Test
+    fun profileCreationNotifies() = runTest {
+        var created = 0
+        fake.signInAs("id-new-0")
+        val vm = SignInViewModel(fake.auth, fake.profileService, onProfileCreated = { created++ })
+        vm.setUsername("newbie")
+        vm.setDisplayName("Newbie")
+        vm.createProfile()
+        assertEquals(SignInStep.DONE, vm.state.value.step)
+        assertEquals(1, created)
+    }
 }

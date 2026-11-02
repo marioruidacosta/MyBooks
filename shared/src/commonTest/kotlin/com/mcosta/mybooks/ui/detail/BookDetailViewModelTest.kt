@@ -9,6 +9,8 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import com.mcosta.mybooks.MainDispatcherTest
 import com.mcosta.mybooks.data.BookRepository
 import com.mcosta.mybooks.data.FakeBookDao
+import com.mcosta.mybooks.data.FakeShareStateDao
+import com.mcosta.mybooks.share.ShareTracker
 import com.mcosta.mybooks.data.SaveResult
 import com.mcosta.mybooks.data.lookup.BookLookupService
 import com.mcosta.mybooks.data.lookup.LookupResult
@@ -179,5 +181,38 @@ class BookDetailViewModelTest : MainDispatcherTest() {
         advanceUntilIdle()
         assertNull(dao.getById(id))
         assertNotNull(vm)
+    }
+
+    @Test
+    fun reviewDraftSavedOnLeave() = runTest {
+        val id = newBook()
+        val (vm, store) = inStore(id, saveScope = this)
+        vm.editReview("Loved it")
+        store.clear()
+        advanceUntilIdle()
+        assertEquals("Loved it", repo.getBook(id)?.review)
+    }
+
+    @Test
+    fun reviewCappedAt2000() = runTest {
+        val id = newBook()
+        val (vm, _) = inStore(id)
+        vm.editReview("x".repeat(2500))
+        assertEquals(2000, vm.reviewDraft.value.length)
+    }
+
+    @Test
+    fun excludeTogglesTracker() = runTest {
+        val sharingRepo = BookRepository(
+            dao, object : BookLookupService { override suspend fun lookup(isbn: String) = LookupResult.NotFound },
+            shareTracker = ShareTracker(FakeShareStateDao(), activeOwner = { "ana" }, onPending = {}),
+        )
+        val id = (sharingRepo.save(Book(title = "Emma")) as SaveResult.Saved).id
+        val vm = BookDetailViewModel(sharingRepo, id, backgroundScope)
+        assertEquals(false, vm.shareExcluded.value)
+        vm.setShareExcluded(true)
+        assertEquals(true, vm.shareExcluded.value)
+        vm.setShareExcluded(false)
+        assertEquals(false, vm.shareExcluded.value)
     }
 }

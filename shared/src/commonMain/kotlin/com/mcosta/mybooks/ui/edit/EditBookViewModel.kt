@@ -27,6 +27,8 @@ data class BookForm(
     val status: ReadingStatus = ReadingStatus.TO_READ,
     val rating: Int? = null,
     val notes: String = "",
+    /** Public review (shown in the form only while signed in to the community). */
+    val review: String = "",
 )
 
 data class EditState(
@@ -106,6 +108,7 @@ class EditBookViewModel(
             status = f.status,
             rating = f.rating,
             notes = f.notes,
+            review = f.review,
         )
         viewModelScope.launch {
             val error = when (val r = repo.save(book)) {
@@ -136,4 +139,5 @@ private fun Book.toForm() = BookForm(
     status = status,
     rating = rating,
     notes = notes,
+    review = review,
 )

@@ -53,7 +53,22 @@ npx supabase db push                       # asks for the database password from
 ```
 
 `db push` applies everything in `supabase/migrations/`. Run it again whenever a new migration is
-added (for example when social part 2 arrives).
+added.
+
+### 3b. Activity feed (social part 2)
+
+Part 2 adds `supabase/migrations/2026110200_social_part2.sql` (shared books, the activity feed and
+likes). Apply it once, the same way:
+
+```powershell
+cd C:\Users\mcosta\GIT\MyBooks
+$env:Path = "C:\Users\mcosta\devtools\node-v18.20.8-win-x64;$env:Path"
+$env:NODE_USE_SYSTEM_CA = "1"
+npx supabase db push                       # lists 2026110200_social_part2.sql; answer Y
+```
+
+Until it's applied, the Activity screen shows an error and book changes simply wait on the phone;
+they're uploaded as soon as the server has the new functions.
 
 ## 4. Give the apps the URL and key
 

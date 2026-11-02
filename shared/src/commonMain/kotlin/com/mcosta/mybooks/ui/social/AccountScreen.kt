@@ -26,6 +26,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -54,6 +55,7 @@ fun AccountScreen(viewModel: AccountViewModel, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val camera = LocalPlatformServices.current.camera
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmStopSharing by remember { mutableStateOf(false) }
     var name by rememberSaveable(state.profile?.displayName) { mutableStateOf(state.profile?.displayName.orEmpty()) }
 
     LaunchedEffect(state.message) {
@@ -129,6 +131,21 @@ fun AccountScreen(viewModel: AccountViewModel, onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Share my reading activity", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Starting, finishing, rating, reviewing and progress on your books. Notes stay private.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = profile.shareActivity,
+                    onCheckedChange = { on -> if (on) viewModel.setShareActivity(true) else confirmStopSharing = true },
+                    enabled = !state.busy,
+                )
+            }
 
             HorizontalDivider()
             Text("Blocked people", style = MaterialTheme.typography.titleSmall)
@@ -154,6 +171,17 @@ fun AccountScreen(viewModel: AccountViewModel, onBack: () -> Unit) {
         }
     }
 
+    if (confirmStopSharing) {
+        AlertDialog(
+            onDismissRequest = { confirmStopSharing = false },
+            title = { Text("Stop sharing?") },
+            text = { Text("This removes everything you've shared from the community.") },
+            confirmButton = {
+                TextButton(onClick = { confirmStopSharing = false; viewModel.setShareActivity(false) }) { Text("Stop sharing") }
+            },
+            dismissButton = { TextButton(onClick = { confirmStopSharing = false }) { Text("Cancel") } },
+        )
+    }
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },

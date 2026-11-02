@@ -37,6 +37,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import com.mcosta.mybooks.data.MAX_REVIEW_LENGTH
 import com.mcosta.mybooks.data.covers.CoverStore
 import com.mcosta.mybooks.ui.components.rememberCoverPhotoTaker
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,7 +47,14 @@ import com.mcosta.mybooks.ui.components.StatusSelector
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditBookScreen(viewModel: EditBookViewModel, isNew: Boolean, onBack: () -> Unit, onSaved: (Long) -> Unit) {
+fun EditBookScreen(
+    viewModel: EditBookViewModel,
+    isNew: Boolean,
+    onBack: () -> Unit,
+    onSaved: (Long) -> Unit,
+    /** Signed in to the community with a profile: the public Review field is shown. */
+    showReview: Boolean = false,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val f = state.form
     val snackbar = remember { SnackbarHostState() }
@@ -121,7 +129,12 @@ fun EditBookScreen(viewModel: EditBookViewModel, isNew: Boolean, onBack: () -> U
                 Field("Cover URL", f.coverUrl, KeyboardType.Uri) { v -> viewModel.update { it.copy(coverUrl = v) } }
             }
             Field("Description", f.description, singleLine = false) { v -> viewModel.update { it.copy(description = v) } }
-            Field("Notes", f.notes, singleLine = false) { v -> viewModel.update { it.copy(notes = v) } }
+            Field("Notes (private)", f.notes, singleLine = false) { v -> viewModel.update { it.copy(notes = v) } }
+            if (showReview) {
+                Field("Review (shared with friends)", f.review, singleLine = false) { v ->
+                    viewModel.update { it.copy(review = v.take(MAX_REVIEW_LENGTH)) }
+                }
+            }
         }
     }
 }

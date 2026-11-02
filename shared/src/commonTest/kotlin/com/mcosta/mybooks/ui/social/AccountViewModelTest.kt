@@ -3,12 +3,14 @@ package com.mcosta.mybooks.ui.social
 import com.mcosta.mybooks.MainDispatcherTest
 import com.mcosta.mybooks.data.covers.PhotoShrinker
 import com.mcosta.mybooks.social.FakeSocial
+import com.mcosta.mybooks.share.SharingStatus
 import com.mcosta.mybooks.social.model.SessionState
 import com.mcosta.mybooks.social.model.Visibility
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AccountViewModelTest : MainDispatcherTest() {
@@ -110,5 +112,27 @@ class AccountViewModelTest : MainDispatcherTest() {
         fake.offline = true
         vm.setVisibility(Visibility.PUBLIC)
         assertEquals("You're offline", vm.state.value.message)
+    }
+
+    @Test
+    fun turningSharingOffCallsServerAndUpdatesProfile() = runTest {
+        fake.signInAs(ana)
+        val forgotten = mutableListOf<String>()
+        val sharing = SharingStatus(fake.services, backgroundScope, onActivated = {}, onDisabled = { forgotten += it })
+        val vm = AccountViewModel(fake.services, shrinker, sharing = sharing, workDispatcher = mainDispatcher)
+        assertTrue(vm.state.value.profile!!.shareActivity)
+        vm.setShareActivity(false)
+        assertFalse(vm.state.value.profile!!.shareActivity)
+        assertFalse(fake.profileService.myProfile()!!.shareActivity)
+        assertEquals(listOf(ana), forgotten)
+    }
+
+    @Test
+    fun turningSharingOnUpdatesProfile() = runTest {
+        fake.signInAs(ana)
+        fake.profileService.setShareActivity(false)
+        val vm = vm()
+        vm.setShareActivity(true)
+        assertTrue(vm.state.value.profile!!.shareActivity)
     }
 }

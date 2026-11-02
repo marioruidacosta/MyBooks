@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -48,17 +49,27 @@ import com.mcosta.mybooks.ui.components.rememberCoverPhotoTaker
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mcosta.mybooks.data.MAX_REVIEW_LENGTH
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
+import com.mcosta.mybooks.share.SharingState
 import com.mcosta.mybooks.ui.components.BookCover
 import com.mcosta.mybooks.ui.components.RatingStars
 import com.mcosta.mybooks.ui.components.StatusSelector
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BookDetailScreen(viewModel: BookDetailViewModel, onBack: () -> Unit, onEdit: () -> Unit) {
+fun BookDetailScreen(
+    viewModel: BookDetailViewModel,
+    onBack: () -> Unit,
+    onEdit: () -> Unit,
+    /** Community sharing: the Review field needs a profile, "Don't share this book" needs sharing on. */
+    sharing: SharingState = SharingState(),
+) {
     val book by viewModel.book.collectAsStateWithLifecycle()
     val notes by viewModel.notesDraft.collectAsStateWithLifecycle()
+    val review by viewModel.reviewDraft.collectAsStateWithLifecycle()
+    val shareExcluded by viewModel.shareExcluded.collectAsStateWithLifecycle()
     val deleted by viewModel.deleted.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
 
@@ -69,8 +80,8 @@ fun BookDetailScreen(viewModel: BookDetailViewModel, onBack: () -> Unit, onEdit:
         onPhoto = viewModel::setCover,
         onError = { scope.launch { snackbar.showSnackbar(it) } },
     )
-    // Save the notes draft if the app goes to the background.
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.saveNotes() }
+    // Save the drafts if the app goes to the background.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.saveNotes(); viewModel.saveReview() }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -81,7 +92,7 @@ fun BookDetailScreen(viewModel: BookDetailViewModel, onBack: () -> Unit, onEdit:
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.saveNotes(); onEdit() }) { Icon(Icons.Filled.Edit, "Edit") }
+                    IconButton(onClick = { viewModel.saveNotes(); viewModel.saveReview(); onEdit() }) { Icon(Icons.Filled.Edit, "Edit") }
                     IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, "Delete") }
                 },
             )
@@ -120,12 +131,30 @@ fun BookDetailScreen(viewModel: BookDetailViewModel, onBack: () -> Unit, onEdit:
             OutlinedTextField(
                 value = notes,
                 onValueChange = viewModel::editNotes,
-                label = { Text("Notes") },
+                label = { Text("Notes (private)") },
                 minLines = 4,
                 modifier = Modifier
                     .fillMaxWidth()
                     .onFocusChanged { if (!it.isFocused) viewModel.saveNotes() },
             )
+            if (sharing.hasProfile) {
+                OutlinedTextField(
+                    value = review,
+                    onValueChange = viewModel::editReview,
+                    label = { Text("Review (shared with friends)") },
+                    supportingText = { Text("${review.length} / $MAX_REVIEW_LENGTH") },
+                    minLines = 3,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { if (!it.isFocused) viewModel.saveReview() },
+                )
+            }
+            if (sharing.activeOwner != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Don't share this book", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Switch(checked = shareExcluded, onCheckedChange = viewModel::setShareExcluded)
+                }
+            }
             b.description?.takeIf { it.isNotBlank() }?.let { Description(it) }
             Text(
                 "Added ${formatDate(b.dateAdded)}",

@@ -141,4 +141,22 @@ class EditBookViewModelTest : MainDispatcherTest() {
         assertNull(saved.publishedYear)
         assertEquals(120, saved.pageCount)
     }
+
+    @Test
+    fun reviewSavedWithBook() = runTest {
+        val vm = EditBookViewModel(repo, bookId = null, isbn = null)
+        vm.update { it.copy(title = "Dune", review = "A classic") }
+        vm.save()
+        assertEquals("A classic", dao.getAll().single().review)
+    }
+
+    @Test
+    fun editingKeepsReview() = runTest {
+        val id = (repo.save(Book(title = "Dune", review = "Old")) as SaveResult.Saved).id
+        val vm = EditBookViewModel(repo, bookId = id, isbn = null)
+        assertEquals("Old", vm.state.value.form.review)
+        vm.update { it.copy(review = "New") }
+        vm.save()
+        assertEquals("New", repo.getBook(id)?.review)
+    }
 }

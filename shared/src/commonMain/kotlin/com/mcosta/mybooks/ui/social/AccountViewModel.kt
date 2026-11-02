@@ -3,6 +3,7 @@ package com.mcosta.mybooks.ui.social
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mcosta.mybooks.data.covers.PhotoShrinker
+import com.mcosta.mybooks.share.SharingStatus
 import com.mcosta.mybooks.social.SocialServices
 import com.mcosta.mybooks.social.model.Person
 import com.mcosta.mybooks.social.model.Profile
@@ -33,6 +34,8 @@ data class AccountState(
 class AccountViewModel(
     private val services: SocialServices,
     private val shrinker: PhotoShrinker,
+    /** Activity sharing; null in tests that don't involve it (the switch then talks to the server only). */
+    private val sharing: SharingStatus? = null,
     private val workDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
     private val _state = MutableStateFlow(AccountState())
@@ -67,6 +70,12 @@ class AccountViewModel(
     fun setAvatar(photo: ByteArray) = launchAction {
         val small = withContext(workDispatcher) { shrinker.shrink(photo, maxSide = 512) }
         _state.update { it.copy(profile = services.profiles.uploadAvatar(small)) }
+    }
+
+    /** "Share my reading activity"; off also removes everything shared, on the server and on this phone. */
+    fun setShareActivity(enabled: Boolean) = launchAction {
+        val profile = sharing?.setShareActivity(enabled) ?: services.profiles.setShareActivity(enabled)
+        _state.update { it.copy(profile = profile) }
     }
 
     fun unblock(userId: String) = launchAction {

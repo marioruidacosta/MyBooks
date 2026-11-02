@@ -23,6 +23,10 @@ All data stays on the phone; you can export/import it as a .zip backup from Sett
 - **Community** (optional, needs a Supabase project, see [docs/social-setup.md](docs/social-setup.md)):
   sign in with an email code, choose a username, find people, send and accept friend requests,
   block and report, choose who sees your activity, delete your account. Your library stays on the phone.
+- **Activity** (community): starting, finishing, rating, reviewing and reading progress are shared
+  automatically (switch off in Account, or per book with *Don't share this book*). The Activity
+  screen shows your friends' and public readers' entries; like them, see who liked, report, or add
+  the book to your own library. Reviews are a separate field from your private notes.
 - **Settings**: export the library, including cover photos, to a `.zip` file / import it back
   (older `.json` backups still import; merges, never deletes).
 

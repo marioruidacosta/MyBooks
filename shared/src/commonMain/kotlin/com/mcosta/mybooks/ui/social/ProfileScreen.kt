@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -16,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -40,18 +43,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mcosta.mybooks.social.model.FeedEntry
 import com.mcosta.mybooks.social.model.Relationship
 import com.mcosta.mybooks.social.model.ReportReason
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(viewModel: ProfileViewModel, onBack: () -> Unit) {
+fun ProfileScreen(viewModel: ProfileViewModel, onBack: () -> Unit, onOpenPerson: (String) -> Unit = {}) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var menuOpen by remember { mutableStateOf(false) }
     var confirmBlock by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf(false) }
     var reporting by remember { mutableStateOf(false) }
+    var reportingEntry by remember { mutableStateOf<FeedEntry?>(null) }
 
     LaunchedEffect(state.left) { if (state.left) onBack() }
     LaunchedEffect(state.message) {
@@ -78,31 +83,86 @@ fun ProfileScreen(viewModel: ProfileViewModel, onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        Column(
-            Modifier.padding(padding).fillMaxSize().padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            if (state.notAvailable) {
-                Text("This profile isn't available", style = MaterialTheme.typography.bodyLarge)
-                return@Column
-            }
-            val person = state.person ?: return@Column
-            PersonAvatar(person.avatarUrl, size = 96.dp)
-            Text(person.displayName, style = MaterialTheme.typography.headlineSmall)
-            Text("@${person.username}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (state.isMe) return@Column
-            when (state.relationship) {
-                Relationship.NONE -> Button(onClick = viewModel::add, enabled = !state.busy) { Text("Add friend") }
-                Relationship.REQUEST_SENT -> OutlinedButton(onClick = viewModel::cancel, enabled = !state.busy) { Text("Cancel request") }
-                Relationship.REQUEST_RECEIVED -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = viewModel::decline, enabled = !state.busy) { Text("Decline") }
-                    Button(onClick = viewModel::accept, enabled = !state.busy) { Text("Accept") }
+        LazyColumn(Modifier.padding(padding).fillMaxSize()) {
+            item {
+                Column(
+                    Modifier.fillMaxWidth().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    if (state.notAvailable) {
+                        Text("This profile isn't available", style = MaterialTheme.typography.bodyLarge)
+                        return@Column
+                    }
+                    val person = state.person ?: return@Column
+                    PersonAvatar(person.avatarUrl, size = 96.dp)
+                    Text(person.displayName, style = MaterialTheme.typography.headlineSmall)
+                    Text("@${person.username}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (state.isMe) return@Column
+                    when (state.relationship) {
+                        Relationship.NONE -> Button(onClick = viewModel::add, enabled = !state.busy) { Text("Add friend") }
+                        Relationship.REQUEST_SENT -> OutlinedButton(onClick = viewModel::cancel, enabled = !state.busy) { Text("Cancel request") }
+                        Relationship.REQUEST_RECEIVED -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = viewModel::decline, enabled = !state.busy) { Text("Decline") }
+                            Button(onClick = viewModel::accept, enabled = !state.busy) { Text("Accept") }
+                        }
+                        Relationship.FRIENDS -> OutlinedButton(onClick = { confirmRemove = true }, enabled = !state.busy) { Text("Friends ✓") }
+                    }
                 }
-                Relationship.FRIENDS -> OutlinedButton(onClick = { confirmRemove = true }, enabled = !state.busy) { Text("Friends ✓") }
+            }
+            val person = state.person
+            if (person != null && !state.notAvailable) {
+                item {
+                    Text(
+                        "Recent activity",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                when {
+                    state.activityHidden -> item {
+                        Text(
+                            "Only ${person.displayName}'s friends can see their activity",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
+                    state.activity.isEmpty() && !state.busy -> item {
+                        Text(
+                            "No activity yet",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
+                    else -> itemsIndexed(state.activity, key = { _, e -> e.id }) { index, entry ->
+                        if (index == state.activity.lastIndex) LaunchedEffect(entry.id) { viewModel.loadMoreActivity() }
+                        FeedEntryCard(
+                            entry = entry,
+                            onPerson = {},
+                            onBook = {},
+                            onLike = { viewModel.toggleLike(entry.id) },
+                            onLikers = { viewModel.showLikers(entry.id) },
+                            onReport = if (state.isMe) null else ({ reportingEntry = entry }),
+                        )
+                        HorizontalDivider()
+                    }
+                }
             }
         }
+    }
+
+    state.likers?.let { people ->
+        LikersSheet(people, onPerson = { viewModel.dismissLikers(); onOpenPerson(it) }, onDismiss = viewModel::dismissLikers)
+    }
+    reportingEntry?.let { entry ->
+        ReportDialog(
+            entry.actor.displayName,
+            onSend = { reason, details -> reportingEntry = null; viewModel.report(reason, details, activityId = entry.id) },
+            onDismiss = { reportingEntry = null },
+        )
     }
 
     val name = state.person?.displayName.orEmpty()

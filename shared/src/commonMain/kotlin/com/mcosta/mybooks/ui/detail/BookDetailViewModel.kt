@@ -3,6 +3,7 @@ package com.mcosta.mybooks.ui.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mcosta.mybooks.data.BookRepository
+import com.mcosta.mybooks.data.MAX_REVIEW_LENGTH
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
 import kotlinx.coroutines.CoroutineScope
@@ -15,8 +16,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * Book detail: status, rating and notes edits are saved immediately; the notes draft is also saved
- * when the screen is left ([onCleared]) using [saveScope], which outlives the ViewModel.
+ * Book detail: status, rating and notes edits are saved immediately; the notes and review drafts are also
+ * saved when the screen is left ([onCleared]) using [saveScope], which outlives the ViewModel.
  */
 class BookDetailViewModel(
     private val repo: BookRepository,
@@ -30,6 +31,12 @@ class BookDetailViewModel(
     private var syncedNotes: String? = null
     private val hasUnsavedNotes get() = syncedNotes != null && _notesDraft.value != syncedNotes
 
+    private val _reviewDraft = MutableStateFlow("")
+    /** The public review being typed (at most [MAX_REVIEW_LENGTH] characters). */
+    val reviewDraft: StateFlow<String> = _reviewDraft.asStateFlow()
+    private var syncedReview: String? = null
+    private val hasUnsavedReview get() = syncedReview != null && _reviewDraft.value != syncedReview
+
     private val _deleted = MutableStateFlow(false)
     val deleted: StateFlow<Boolean> = _deleted.asStateFlow()
 
@@ -40,8 +47,19 @@ class BookDetailViewModel(
                 if (!hasUnsavedNotes) _notesDraft.value = b.notes
                 syncedNotes = b.notes
             }
+            if (b != null && b.review != syncedReview) {
+                if (!hasUnsavedReview) _reviewDraft.value = b.review
+                syncedReview = b.review
+            }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** "Don't share this book". */
+    val shareExcluded: StateFlow<Boolean> = repo.observeShareExcluded(id).stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun setShareExcluded(excluded: Boolean) {
+        viewModelScope.launch { repo.setShareExcluded(id, excluded) }
+    }
 
     fun setStatus(status: ReadingStatus) {
         viewModelScope.launch { repo.setStatus(id, status) }
@@ -87,6 +105,17 @@ class BookDetailViewModel(
         saveScope.launch { repo.setNotes(id, draft) }
     }
 
+    fun editReview(text: String) {
+        _reviewDraft.value = text.take(MAX_REVIEW_LENGTH)
+    }
+
+    fun saveReview() {
+        if (_deleted.value || !hasUnsavedReview) return
+        val draft = _reviewDraft.value
+        syncedReview = draft
+        saveScope.launch { repo.setReview(id, draft) }
+    }
+
     fun delete() {
         _deleted.value = true
         viewModelScope.launch { repo.delete(id) }
@@ -94,5 +123,6 @@ class BookDetailViewModel(
 
     override fun onCleared() {
         saveNotes()
+        saveReview()
     }
 }

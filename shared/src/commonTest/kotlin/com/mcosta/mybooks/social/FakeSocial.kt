@@ -40,6 +40,7 @@ class FakeSocial {
     /** Shared ids that belong to another account: publishing them fails with NOT_AVAILABLE. */
     val takenShareIds = mutableSetOf<String>()
     var publishAttempts = 0
+    var personActivityCalls = 0
     /** Runs inside publish, before it succeeds (e.g. to change the book mid-upload). */
     var onPublish: suspend () -> Unit = {}
 
@@ -268,6 +269,7 @@ class FakeSocial {
         }
         override suspend fun personActivity(userId: String, cursor: FeedCursor?): FeedPage {
             check()
+            personActivityCalls++
             val me = me()
             return page(if (canSeeActivityOf(me, userId)) entries.filter { it.actor == userId } else emptyList(), cursor, me)
         }

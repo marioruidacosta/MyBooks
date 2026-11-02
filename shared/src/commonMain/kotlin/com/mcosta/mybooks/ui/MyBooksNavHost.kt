@@ -12,6 +12,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.mcosta.mybooks.AppContainer
 import com.mcosta.mybooks.platform.ScanOutcome
+import com.mcosta.mybooks.share.SharingState
 import com.mcosta.mybooks.social.model.SessionState
 import com.mcosta.mybooks.ui.social.AccountRoute
 import com.mcosta.mybooks.ui.social.ActivityScreen
@@ -52,6 +53,7 @@ object Routes {
 @Composable
 fun MyBooksNavHost(container: AppContainer) {
     val social = container.social
+    val sharing = container.sharingStatus?.state?.collectAsStateWithLifecycle()?.value ?: SharingState()
     val nav = rememberNavController()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -95,6 +97,7 @@ fun MyBooksNavHost(container: AppContainer) {
                 onSaved = { id ->
                     nav.navigate(Routes.book(id)) { popUpTo(Routes.LIBRARY) }
                 },
+                showReview = sharing.hasProfile,
             )
         }
         composable(Routes.BOOK, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
@@ -103,6 +106,7 @@ fun MyBooksNavHost(container: AppContainer) {
                 viewModel = viewModel { BookDetailViewModel(container.repository, id, container.applicationScope) },
                 onBack = { nav.popBackStack() },
                 onEdit = { nav.navigate(Routes.edit(id)) },
+                sharing = sharing,
             )
         }
         composable(Routes.SETTINGS) {
@@ -137,10 +141,14 @@ fun MyBooksNavHost(container: AppContainer) {
             }
             composable(Routes.PROFILE, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
                 val userId = entry.savedStateHandle.get<String>("id")!!
-                ProfileScreen(viewModel { ProfileViewModel(social, userId) }, onBack = { nav.popBackStack() })
+                ProfileScreen(
+                    viewModel { ProfileViewModel(social, userId) },
+                    onBack = { nav.popBackStack() },
+                    onOpenPerson = { nav.navigate(Routes.profile(it)) },
+                )
             }
             composable(Routes.ACCOUNT) {
-                AccountRoute(social, onBack = { nav.popBackStack() })
+                AccountRoute(social, container.sharingStatus, onBack = { nav.popBackStack() })
             }
         }
         composable(Routes.EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
@@ -150,6 +158,7 @@ fun MyBooksNavHost(container: AppContainer) {
                 isNew = false,
                 onBack = { nav.popBackStack() },
                 onSaved = { nav.popBackStack() },
+                showReview = sharing.hasProfile,
             )
         }
     }

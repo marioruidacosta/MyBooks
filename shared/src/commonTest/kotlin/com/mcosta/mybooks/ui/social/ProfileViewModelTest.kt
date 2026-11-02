@@ -2,6 +2,8 @@ package com.mcosta.mybooks.ui.social
 
 import com.mcosta.mybooks.MainDispatcherTest
 import com.mcosta.mybooks.social.FakeSocial
+import com.mcosta.mybooks.social.model.ActivityKind
+import com.mcosta.mybooks.social.model.Visibility
 import com.mcosta.mybooks.social.model.Relationship
 import com.mcosta.mybooks.social.model.ReportReason
 import kotlinx.coroutines.test.runTest
@@ -101,5 +103,51 @@ class ProfileViewModelTest : MainDispatcherTest() {
         val vm = vm(ana)
         assertTrue(vm.state.value.isMe)
         assertFalse(vm.state.value.notAvailable)
+    }
+
+    @Test
+    fun publicStrangerShowsActivity() = runTest {
+        val carla = fake.addUser("carla").also { fake.setVisibility(it, Visibility.PUBLIC) }
+        fake.addEntry(carla, ActivityKind.FINISHED, title = "Emma")
+        fake.signInAs(ana)
+        val state = vm(carla).state.value
+        assertFalse(state.activityHidden)
+        assertEquals(listOf("Emma"), state.activity.map { it.book.title })
+    }
+
+    @Test
+    fun friendsOnlyStrangerShowsHidden() = runTest {
+        fake.addEntry(bruno, ActivityKind.FINISHED)
+        fake.signInAs(ana)
+        val state = vm().state.value
+        assertTrue(state.activityHidden)
+        assertTrue(state.activity.isEmpty())
+        assertEquals(0, fake.personActivityCalls)
+    }
+
+    @Test
+    fun friendShowsActivity() = runTest {
+        fake.makeFriends(ana, bruno)
+        val id = fake.addEntry(bruno, ActivityKind.STARTED, title = "Dune")
+        fake.signInAs(ana)
+        val vm = vm()
+        assertFalse(vm.state.value.activityHidden)
+        assertEquals(listOf("Dune"), vm.state.value.activity.map { it.book.title })
+        vm.toggleLike(id)
+        assertTrue(vm.state.value.activity.single().likedByMe)
+        assertEquals(1, vm.state.value.activity.single().likeCount)
+    }
+
+    @Test
+    fun likersShownOnProfile() = runTest {
+        fake.makeFriends(ana, bruno)
+        val id = fake.addEntry(bruno, ActivityKind.STARTED)
+        fake.signInAs(ana)
+        fake.activityService.like(id)
+        val vm = vm()
+        vm.showLikers(id)
+        assertEquals(listOf("ana"), vm.state.value.likers?.map { it.username })
+        vm.dismissLikers()
+        assertNull(vm.state.value.likers)
     }
 }

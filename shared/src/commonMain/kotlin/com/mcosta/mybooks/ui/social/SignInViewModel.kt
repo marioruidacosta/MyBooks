@@ -38,7 +38,12 @@ data class SignInState(
 private val emailPattern = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
 
 /** Email → 6-digit code → (first time) username and display name. */
-class SignInViewModel(private val auth: AuthService, private val profiles: ProfileService) : ViewModel() {
+class SignInViewModel(
+    private val auth: AuthService,
+    private val profiles: ProfileService,
+    /** Called once a new profile exists (activity sharing then starts). */
+    private val onProfileCreated: suspend () -> Unit = {},
+) : ViewModel() {
     private val _state = MutableStateFlow(SignInState())
     val state: StateFlow<SignInState> = _state.asStateFlow()
     private var availabilityJob: Job? = null
@@ -149,6 +154,7 @@ class SignInViewModel(private val auth: AuthService, private val profiles: Profi
             s.displayName.isBlank() -> _state.update { it.copy(error = "Enter a name") }
             else -> viewModelScope.launch {
                 val failure = attempt { profiles.createProfile(s.username, s.displayName.trim()) }
+                if (failure == null) onProfileCreated()
                 _state.update {
                     when {
                         failure == null -> it.copy(step = SignInStep.DONE)
