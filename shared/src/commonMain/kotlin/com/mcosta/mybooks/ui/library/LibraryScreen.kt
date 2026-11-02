@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -74,6 +75,8 @@ fun LibraryScreen(
     onAddManually: () -> Unit,
     onScan: () -> Unit,
     onOpenSettings: () -> Unit,
+    /** New in Portugal (always available). */
+    onOpenReleases: (() -> Unit)? = null,
     /** Null when the community features aren't configured: no Friends icon. */
     onOpenFriends: (() -> Unit)? = null,
     /** Null when the community features aren't configured: no Activity icon. */
@@ -88,6 +91,9 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text("MyBooks") },
                 actions = {
+                    if (onOpenReleases != null) {
+                        IconButton(onClick = onOpenReleases) { Icon(Icons.Filled.NewReleases, "New in Portugal") }
+                    }
                     if (onOpenActivity != null) {
                         IconButton(onClick = onOpenActivity) { Icon(Icons.Filled.DynamicFeed, "Activity") }
                     }

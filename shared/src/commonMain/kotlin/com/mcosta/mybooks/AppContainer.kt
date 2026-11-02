@@ -11,6 +11,8 @@ import com.mcosta.mybooks.data.lookup.GoogleBooksClient
 import com.mcosta.mybooks.data.lookup.LookupChain
 import com.mcosta.mybooks.data.lookup.OpenLibraryClient
 import com.mcosta.mybooks.data.lookup.lookupHttpClient
+import com.mcosta.mybooks.data.releases.ReleasesClient
+import com.mcosta.mybooks.data.releases.ReleasesRepository
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.share.Publisher
 import com.mcosta.mybooks.share.ShareLock
@@ -24,6 +26,8 @@ import io.ktor.client.engine.HttpClientEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import okio.FileSystem
+import okio.Path
 
 /** Hand-wired app dependencies, created once per app from the platform's pieces. */
 class AppContainer(
@@ -34,11 +38,17 @@ class AppContainer(
     userAgent: String,
     socialConfig: SocialConfig = SocialConfig("", ""),
     socialSettings: Settings? = null,
+    /** Where New in Portugal's downloaded lists are saved. */
+    releasesFileSystem: FileSystem,
+    releasesDir: Path,
 ) {
     /** Outlives screens; used for writes that must finish after a screen closes. */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val http = lookupHttpClient(httpEngine, userAgent)
+
+    /** New in Portugal: monthly lists of new books, downloaded from GitHub Pages and saved on the phone. */
+    val releases = ReleasesRepository(ReleasesClient(http), releasesFileSystem, releasesDir)
 
     /** The community features, or null when Supabase isn't configured (then they're hidden). */
     val social: SocialServices? = socialFor(socialConfig, httpEngine) { config, engine ->

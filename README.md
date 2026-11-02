@@ -27,6 +27,10 @@ All data stays on the phone; you can export/import it as a .zip backup from Sett
   automatically (switch off in Account, or per book with *Don't share this book*). The Activity
   screen shows your friends' and public readers' entries; like them, see who liked, report, or add
   the book to your own library. Reviews are a separate field from your private notes.
+- **New in Portugal**: each month's new books published in Portugal (from the National Library's legal
+  deposit records), by genre, for the current month and the six before it. Add a book to your library, or
+  open it at Bertrand, Almedina, Wook or Fnac. Built nightly by a GitHub Actions job; see
+  [docs/releases-setup.md](docs/releases-setup.md).
 - **Settings**: export the library, including cover photos, to a `.zip` file / import it back
   (older `.json` backups still import; merges, never deletes).
 
