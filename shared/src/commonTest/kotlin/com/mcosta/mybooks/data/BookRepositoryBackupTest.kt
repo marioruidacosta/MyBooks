@@ -148,4 +148,21 @@ class BookRepositoryBackupTest {
         assertEquals(true, decoded.single().second?.excluded)
         assertEquals(shares.get(id)!!.shareId, decoded.single().second?.shareId)
     }
+
+    @Test
+    fun restoreOverExistingRowKeepsShareIdAndPending() = runTest {
+        owner = "ana"
+        val id = (sharingRepo.save(Book(title = "Dune", isbn = "9780441013593")) as SaveResult.Saved).id
+        val before = shares.get(id)!!
+        assertTrue(before.pending)
+        val json = BackupSerializer.encode(
+            listOf(Book(id = 1, title = "Dune", isbn = "9780441013593")), exportedAt = 0,
+            shares = mapOf(1L to BackupShare("old-phone-id", excluded = true)),
+        )
+        sharingRepo.importJson(json)
+        val after = shares.get(id)!!
+        assertEquals(before.shareId, after.shareId)
+        assertTrue(after.pending)
+        assertTrue(after.excluded)
+    }
 }

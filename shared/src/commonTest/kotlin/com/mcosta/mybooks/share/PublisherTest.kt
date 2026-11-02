@@ -11,6 +11,8 @@ import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.social.FakeSocial
 import com.mcosta.mybooks.social.SocialException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -195,5 +197,55 @@ class PublisherTest {
         publisher().syncNow()
         assertNull(fake.published.single().first.coverUrl)
         assertNotEquals("", fake.published.single().first.title)
+    }
+
+    @Test
+    fun rejectedRowIsSkippedAndOthersContinue() = runTest {
+        val bad = book("Bad")
+        val good = book("Good")
+        pendingRow(bad)
+        pendingRow(good)
+        fake.rejectedShareIds += "s$bad"
+        publisher().syncNow()
+        assertEquals(listOf("s$good"), fake.published.map { it.first.shareId })
+        assertFalse(shares.get(bad)!!.pending)
+    }
+
+    @Test
+    fun accountSwitchMidRunStops() = runTest {
+        pendingRow(book("A"))
+        pendingRow(book("B"))
+        fake.onPublish = { owner = "bruno" }
+        publisher().syncNow()
+        assertEquals(1, fake.publishAttempts)
+    }
+
+    /** The tracker re-marks a row while the Publisher is checking its upload: the change must not be lost. */
+    @Test
+    fun changeDuringPostUploadCheckNotLost() = runTest {
+        val id = book("Dune", rating = 3)
+        pendingRow(id)
+        val lock = ShareLock()
+        val tracker = ShareTracker(shares, activeOwner = { owner }, onPending = {}, lock = lock)
+        var loads = 0
+        val publisher = Publisher(
+            shares,
+            loadBook = { bookId ->
+                val current = books.getById(bookId)!!.toBook()
+                if (++loads == 2) {
+                    backgroundScope.launch {
+                        val changed = current.copy(rating = 5)
+                        books.update(changed.toEntity())
+                        tracker.changed(current, changed)
+                    }
+                    yield()
+                }
+                current
+            },
+            activity = fake.activityService, activeOwner = { owner }, scope = backgroundScope, lock = lock,
+        )
+        publisher.syncNow()
+        runCurrent()
+        assertTrue(shares.get(id)!!.pending)
     }
 }

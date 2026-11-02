@@ -15,7 +15,8 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** Failures the social screens explain to the user; every service call throws only this. */
 class SocialException(val kind: Kind, message: String, cause: Throwable? = null) : Exception(message, cause) {
-    enum class Kind { OFFLINE, SECURE_CONNECTION, TIMEOUT, INVALID_CODE, USERNAME_TAKEN, NOT_AVAILABLE, OTHER }
+    /** REJECTED: the server refused the data (e.g. a title over its length limit). */
+    enum class Kind { OFFLINE, SECURE_CONNECTION, TIMEOUT, INVALID_CODE, USERNAME_TAKEN, NOT_AVAILABLE, REJECTED, OTHER }
 }
 
 /** Email one-time-code sign-in. */

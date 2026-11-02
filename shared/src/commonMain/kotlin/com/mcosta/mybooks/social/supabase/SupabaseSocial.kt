@@ -117,6 +117,7 @@ internal fun mapSocialError(e: Throwable): SocialException = when {
         SocialException(SocialException.Kind.INVALID_CODE, "invalid code", e)
     e is PostgrestRestException && e.code == "23505" -> SocialException(SocialException.Kind.USERNAME_TAKEN, "username taken", e)
     e is PostgrestRestException && e.code == "P0002" -> SocialException(SocialException.Kind.NOT_AVAILABLE, "not available", e)
+    e is PostgrestRestException && e.code == "22023" -> SocialException(SocialException.Kind.REJECTED, "rejected", e)
     else -> SocialException(SocialException.Kind.OTHER, e.message ?: "error", e)
 }
 

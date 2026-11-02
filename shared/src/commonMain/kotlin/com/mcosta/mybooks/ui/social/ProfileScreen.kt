@@ -143,7 +143,7 @@ fun ProfileScreen(viewModel: ProfileViewModel, onBack: () -> Unit, onOpenPerson:
                             entry = entry,
                             onPerson = {},
                             onBook = {},
-                            onLike = { viewModel.toggleLike(entry.id) },
+                            onLike = if (state.isMe) null else ({ viewModel.toggleLike(entry.id) }),
                             onLikers = { viewModel.showLikers(entry.id) },
                             onReport = if (state.isMe) null else ({ reportingEntry = entry }),
                         )

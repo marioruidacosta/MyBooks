@@ -183,4 +183,14 @@ class ActivityViewModelTest : MainDispatcherTest() {
         vm.refresh()
         assertNull(vm.state.value.error)
     }
+
+    @Test
+    fun ownEntryCannotBeLiked() = runTest {
+        val id = fake.addEntry(ana, ActivityKind.STARTED)
+        fake.signInAs(ana)
+        val vm = vm()
+        vm.toggleLike(id)
+        assertFalse(vm.state.value.entries.single().likedByMe)
+        assertNull(vm.state.value.message)
+    }
 }

@@ -56,15 +56,15 @@ class SharingStatus(
     /** Turns sharing on or off on the server; off also forgets the local sharing state. */
     suspend fun setShareActivity(enabled: Boolean): Profile {
         val profile = social.profiles.setShareActivity(enabled)
-        if (!enabled) onDisabled(profile.id)
+        // Stop tracking first, so an edit made meanwhile isn't left waiting under a forgotten owner.
         set(SharingState(profile.id, hasProfile = true, shareActivity = profile.shareActivity))
+        if (!enabled) onDisabled(profile.id)
         return profile
     }
 
     private suspend fun load(userId: String) {
-        try {
-            val profile = social.profiles.myProfile()
-            set(SharingState(userId, hasProfile = profile != null, shareActivity = profile?.shareActivity == true))
+        val profile = try {
+            social.profiles.myProfile()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -75,7 +75,13 @@ class SharingStatus(
                 delay(RETRY_DELAY)
                 load(userId)
             }
+            return
         }
+        val loaded = SharingState(userId, hasProfile = profile != null, shareActivity = profile?.shareActivity == true)
+        set(loaded)
+        // Not sharing: drop anything tracked while sharing was only assumed on (e.g. offline at start),
+        // so it can never be posted later.
+        if (loaded.activeOwner == null) onDisabled(userId)
     }
 
     private fun set(new: SharingState) {

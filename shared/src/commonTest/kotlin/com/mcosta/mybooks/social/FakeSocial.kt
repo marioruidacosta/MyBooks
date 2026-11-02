@@ -39,6 +39,8 @@ class FakeSocial {
     var failPublish: SocialException? = null
     /** Shared ids that belong to another account: publishing them fails with NOT_AVAILABLE. */
     val takenShareIds = mutableSetOf<String>()
+    /** Shared ids whose data the server rejects (e.g. too long). */
+    val rejectedShareIds = mutableSetOf<String>()
     var publishAttempts = 0
     var personActivityCalls = 0
     /** Runs inside publish, before it succeeds (e.g. to change the book mid-upload). */
@@ -247,6 +249,7 @@ class FakeSocial {
             publishAttempts++
             failPublish?.let { throw it }
             if (book.shareId in takenShareIds) throw SocialException(SocialException.Kind.NOT_AVAILABLE, "not available")
+            if (book.shareId in rejectedShareIds) throw SocialException(SocialException.Kind.REJECTED, "invalid book")
             onPublish()
             published += book to before
         }

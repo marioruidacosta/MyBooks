@@ -35,6 +35,7 @@ class Publisher(
     private val scope: CoroutineScope,
     private val debounce: Duration = 2.seconds,
     private val newShareId: () -> String = ::randomShareId,
+    private val lock: ShareLock = ShareLock(),
 ) {
     private var timer: Job? = null
     private val running = Mutex()
@@ -52,15 +53,25 @@ class Publisher(
         val owner = activeOwner() ?: return@withLock
         dao.adoptOrphans(owner)
         for (waiting in dao.pendingFor(owner)) {
+            // Another account signed in meanwhile: its session must not upload this account's books.
+            if (activeOwner() != owner) return@withLock
             val row = dao.get(waiting.bookId)?.takeIf { it.pending && it.owner == owner } ?: continue
             try {
                 upload(row)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: SocialException) {
-                if (e.kind == SocialException.Kind.NOT_AVAILABLE) {
-                    giveNewShareId(row)
-                    continue
+                when (e.kind) {
+                    SocialException.Kind.NOT_AVAILABLE -> {
+                        giveNewShareId(row)
+                        continue
+                    }
+                    // The server refuses this book's data: skip it (until it changes) instead of blocking the others.
+                    SocialException.Kind.REJECTED -> {
+                        lock.mutex.withLock { if (dao.get(row.bookId) == row) dao.upsert(row.copy(pending = false)) }
+                        continue
+                    }
+                    else -> Unit
                 }
                 return@withLock
             } catch (e: Exception) {
@@ -75,19 +86,21 @@ class Publisher(
         when {
             row.deleted || book == null -> {
                 activity.unpublish(row.shareId)
-                if (dao.get(row.bookId) == row) dao.delete(row.bookId)
+                lock.mutex.withLock { if (dao.get(row.bookId) == row) dao.delete(row.bookId) }
             }
             row.excluded -> {
                 activity.unpublish(row.shareId)
-                if (dao.get(row.bookId) == row) dao.upsert(row.copy(pending = false))
+                lock.mutex.withLock { if (dao.get(row.bookId) == row) dao.upsert(row.copy(pending = false)) }
             }
             else -> {
                 val sent = book.publicState(row.shareId)
                 activity.publish(sent, row.before(book))
-                if (dao.get(row.bookId) != row) return
-                // The server has the book now, so "before" is done with. Edited during the upload: send again.
-                val unchanged = loadBook(row.bookId)?.publicState(row.shareId) == sent
-                dao.upsert(row.withoutBefore().copy(pending = !unchanged))
+                lock.mutex.withLock {
+                    if (dao.get(row.bookId) != row) return
+                    // The server has the book now, so "before" is done with. Edited during the upload: send again.
+                    val unchanged = loadBook(row.bookId)?.publicState(row.shareId) == sent
+                    dao.upsert(row.withoutBefore().copy(pending = !unchanged))
+                }
             }
         }
     }
@@ -95,12 +108,15 @@ class Publisher(
     /** The shared id belongs to another account (e.g. a backup restored by someone else): start afresh. */
     private suspend fun giveNewShareId(row: ShareStateEntity) {
         val book = loadBook(row.bookId) ?: return
-        dao.upsert(
-            row.copy(
-                shareId = newShareId(), hasBefore = true, beforeStatus = book.status, beforeRating = book.rating,
-                beforeProgress = book.progressPercent, beforeReview = book.review,
+        lock.mutex.withLock {
+            if (dao.get(row.bookId) != row) return
+            dao.upsert(
+                row.copy(
+                    shareId = newShareId(), hasBefore = true, beforeStatus = book.status, beforeRating = book.rating,
+                    beforeProgress = book.progressPercent, beforeReview = book.review,
+                )
             )
-        )
+        }
     }
 
     private fun ShareStateEntity.before(book: Book): PublicBookState? {

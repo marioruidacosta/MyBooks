@@ -280,4 +280,13 @@ class SupabaseSocialTest : MainDispatcherTest() {
         social.services.safety.report("id-bruno", ReportReason.SPAM, null, activityId = 12)
         assertTrue(bodyOf("/rest/v1/reports").contains("\"activity\":12"), bodyOf("/rest/v1/reports"))
     }
+
+    @Test
+    fun invalidDataMapsToRejected() = runTest {
+        val social = social(
+            mapOf("/rest/v1/rpc/publish_book" to listOf(400 to """{"code":"22023","message":"invalid book","details":null,"hint":null}"""))
+        )
+        val e = assertFailsWith<SocialException> { social.services.activity.publish(book, null) }
+        assertEquals(SocialException.Kind.REJECTED, e.kind)
+    }
 }

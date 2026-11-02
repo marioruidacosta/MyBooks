@@ -99,4 +99,37 @@ class SharingStatusTest {
         assertTrue(status.state.value.confirmed)
         assertEquals(ana, status.state.value.activeOwner)
     }
+
+    /** Rows tracked while sharing was only assumed on must not be posted later. */
+    @Test
+    fun confirmedOffForgetsRowsTrackedWhileAssumed() = runTest {
+        fake.signInAs(ana)
+        fake.profileService.setShareActivity(false)
+        fake.offline = true
+        val status = status()
+        assertEquals(ana, status.state.value.activeOwner)
+        fake.offline = false
+        advanceTimeBy(61.seconds)
+        runCurrent()
+        assertNull(status.state.value.activeOwner)
+        assertEquals(listOf(ana), disabled)
+    }
+
+    @Test
+    fun noProfileForgetsRows() = runTest {
+        fake.signInAs("id-no-profile")
+        status()
+        assertEquals(listOf("id-no-profile"), disabled)
+    }
+
+    @Test
+    fun disablingStopsSharingBeforeForgetting() = runTest {
+        fake.signInAs(ana)
+        var activeWhenForgetting: String? = "unset"
+        lateinit var status: SharingStatus
+        status = SharingStatus(fake.services, backgroundScope, onActivated = {}, onDisabled = { activeWhenForgetting = status.state.value.activeOwner })
+        runCurrent()
+        status.setShareActivity(false)
+        assertNull(activeWhenForgetting)
+    }
 }

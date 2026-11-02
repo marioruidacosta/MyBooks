@@ -103,7 +103,7 @@ fun ActivityScreen(
                                 entry = entry,
                                 onPerson = { onOpenPerson(entry.actor.id) },
                                 onBook = { viewModel.openBook(entry.book) },
-                                onLike = { viewModel.toggleLike(entry.id) },
+                                onLike = if (entry.actor.id == state.myId) null else ({ viewModel.toggleLike(entry.id) }),
                                 onLikers = { viewModel.showLikers(entry.id) },
                                 onReport = if (entry.actor.id == state.myId) null else ({ reporting = entry }),
                             )

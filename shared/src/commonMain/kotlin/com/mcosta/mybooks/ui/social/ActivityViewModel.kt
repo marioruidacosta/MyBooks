@@ -128,6 +128,7 @@ class ActivityViewModel(
     /** Flips the heart at once; puts it back with a message if the server call fails. */
     fun toggleLike(entryId: Long) {
         val entry = _state.value.entries.firstOrNull { it.id == entryId } ?: return
+        if (entry.actor.id == _state.value.myId) return  // the server refuses likes on your own entries
         val liking = !entry.likedByMe
         replace(entryId) { it.copy(likedByMe = liking, likeCount = (it.likeCount + if (liking) 1 else -1).coerceAtLeast(0)) }
         viewModelScope.launch {

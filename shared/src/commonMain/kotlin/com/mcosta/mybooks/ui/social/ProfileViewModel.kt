@@ -83,6 +83,7 @@ class ProfileViewModel(private val services: SocialServices, private val userId:
     /** Flips the heart at once; puts it back with a message if the server call fails. */
     fun toggleLike(entryId: Long) {
         val entry = _state.value.activity.firstOrNull { it.id == entryId } ?: return
+        if (_state.value.isMe) return  // the server refuses likes on your own entries
         val liking = !entry.likedByMe
         replaceEntry(entryId) { it.copy(likedByMe = liking, likeCount = (it.likeCount + if (liking) 1 else -1).coerceAtLeast(0)) }
         viewModelScope.launch {

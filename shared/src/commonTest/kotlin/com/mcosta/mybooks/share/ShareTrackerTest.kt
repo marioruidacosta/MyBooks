@@ -171,4 +171,49 @@ class ShareTrackerTest {
         assertEquals("https://x/y.jpg", book.copy(coverUrl = "https://x/y.jpg").publicState("s").coverUrl)
         assertEquals(30, book.publicState("s").progress)
     }
+
+    @Test
+    fun exclusionSurvivesOwnerChange() = runTest {
+        val id = oldBook(Book(title = "Private"))
+        repo.setShareExcluded(id, true)
+        shares.upsert(shares.get(id)!!.copy(pending = false))
+        owner = "ana-rejoined"
+        repo.setRating(id, 2)
+        assertTrue(shares.get(id)!!.excluded)
+        assertFalse(shares.get(id)!!.pending)
+        assertTrue(repo.observeShareExcluded(id).first())
+    }
+
+    @Test
+    fun excludeTakesRowOverForCurrentOwner() = runTest {
+        val id = oldBook(Book(title = "Dune"))
+        owner = "bruno"
+        repo.setRating(id, 3)
+        owner = "ana"
+        repo.setShareExcluded(id, true)
+        assertEquals("ana", shares.get(id)!!.owner)
+        assertTrue(shares.get(id)!!.excluded)
+    }
+
+    @Test
+    fun exclusionSurvivesSharingOffAndOn() = runTest {
+        val kept = oldBook(Book(title = "Private"))
+        val other = oldBook(Book(title = "Public"))
+        repo.setShareExcluded(kept, true)
+        repo.setRating(other, 3)
+        tracker.forgetOwner("ana")
+        assertNull(shares.get(other))
+        val row = shares.get(kept)!!
+        assertTrue(row.excluded)
+        assertFalse(row.pending)
+        repo.setRating(kept, 4)
+        assertFalse(shares.get(kept)!!.pending)
+    }
+
+    @Test
+    fun publicStateClampsLongText() {
+        val book = Book(id = 1, title = "t".repeat(400), authors = "a".repeat(400))
+        assertEquals(300, book.publicState("s").title.length)
+        assertEquals(300, book.publicState("s").authors.length)
+    }
 }

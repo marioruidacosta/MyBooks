@@ -13,6 +13,7 @@ import com.mcosta.mybooks.data.lookup.OpenLibraryClient
 import com.mcosta.mybooks.data.lookup.lookupHttpClient
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.share.Publisher
+import com.mcosta.mybooks.share.ShareLock
 import com.mcosta.mybooks.share.ShareTracker
 import com.mcosta.mybooks.share.SharingStatus
 import com.mcosta.mybooks.social.SocialConfig
@@ -84,8 +85,9 @@ internal fun sharingFor(
     if (social == null) return null
     lateinit var status: SharingStatus
     val activeOwner = { status.state.value.activeOwner }
-    val publisher = Publisher(dao, loadBook, social.activity, activeOwner, scope)
-    val tracker = ShareTracker(dao, activeOwner, onPending = publisher::requestSync)
+    val lock = ShareLock()
+    val publisher = Publisher(dao, loadBook, social.activity, activeOwner, scope, lock = lock)
+    val tracker = ShareTracker(dao, activeOwner, onPending = publisher::requestSync, lock = lock)
     status = SharingStatus(social, scope, onActivated = publisher::requestSync, onDisabled = tracker::forgetOwner)
     return Sharing(tracker, status, publisher)
 }

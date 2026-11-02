@@ -43,14 +43,14 @@ import com.mcosta.mybooks.ui.components.BookCover
 
 /**
  * One feed entry: who did what and when, the book, the review, and the heart.
- * [onReport] is null on the user's own entries (no Report in the menu).
+ * [onLike] and [onReport] are null on the user's own entries (no heart button, no Report in the menu).
  */
 @Composable
 fun FeedEntryCard(
     entry: FeedEntry,
     onPerson: () -> Unit,
     onBook: () -> Unit,
-    onLike: () -> Unit,
+    onLike: (() -> Unit)?,
     onLikers: () -> Unit,
     onReport: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -106,11 +106,13 @@ fun FeedEntryCard(
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onLike, modifier = Modifier.size(40.dp)) {
-                if (entry.likedByMe) {
-                    Icon(Icons.Filled.Favorite, "Unlike", tint = MaterialTheme.colorScheme.primary)
-                } else {
-                    Icon(Icons.Filled.FavoriteBorder, "Like")
+            if (onLike != null) {
+                IconButton(onClick = onLike, modifier = Modifier.size(40.dp)) {
+                    if (entry.likedByMe) {
+                        Icon(Icons.Filled.Favorite, "Unlike", tint = MaterialTheme.colorScheme.primary)
+                    } else {
+                        Icon(Icons.Filled.FavoriteBorder, "Like")
+                    }
                 }
             }
             if (entry.likeCount > 0) {
