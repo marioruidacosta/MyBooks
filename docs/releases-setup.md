@@ -14,7 +14,7 @@ months after they reach the shops: the Library records only the publication year
 
 1. On GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 2. **Actions → Releases job → Run workflow**. The first run fills in the current month and the six before it
-   (a few hundred requests to the Library, two seconds apart, so it takes 20–40 minutes), creates the
+   (about 80 requests to the Library, two seconds apart: a few minutes), creates the
    `releases-data` branch and publishes the files.
 3. Check that `https://marioruidacosta.github.io/MyBooks/releases/index.json` lists seven months.
 

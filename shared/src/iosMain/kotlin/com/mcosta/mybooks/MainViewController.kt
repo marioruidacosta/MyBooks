@@ -38,6 +38,8 @@ private val container: AppContainer by lazy {
         // Sending the sign-in email can take longer than the default wait.
         httpEngine = Darwin.create { configureSession { timeoutIntervalForRequest = 30.0 } },
         coverStore = CoverStore(FileSystem.SYSTEM, "$documents/covers".toPath()),
+        releasesFileSystem = FileSystem.SYSTEM,
+        releasesDir = "$documents/releases".toPath(),
         googleBooksApiKey = infoString("GoogleBooksApiKey").trim(),
         userAgent = "MyBooks/${infoString("CFBundleShortVersionString")} (iOS; personal library app)",
         socialConfig = SocialConfig(infoString("SupabaseUrl").trim(), infoString("SupabaseAnonKey").trim()),

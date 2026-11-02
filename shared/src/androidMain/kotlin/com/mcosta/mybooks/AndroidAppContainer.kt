@@ -21,6 +21,8 @@ fun androidAppContainer(context: Context, googleBooksApiKey: String, appVersion:
         }
     },
     coverStore = CoverStore(FileSystem.SYSTEM, context.filesDir.toOkioPath() / "covers"),
+    releasesFileSystem = FileSystem.SYSTEM,
+    releasesDir = context.filesDir.toOkioPath() / "releases",
     googleBooksApiKey = googleBooksApiKey,
     userAgent = "MyBooks/$appVersion (Android; personal library app)",
     socialConfig = socialConfig,
