@@ -39,6 +39,11 @@ $$;
 create function pg_temp.kinds(book uuid) returns text[] language sql as $$
   select coalesce(array_agg(kind::text order by id), '{}') from person_activity(auth.uid(), null, null, 50) where book_id = book;
 $$;
+-- Re-publishes ana's A4 with [url] as its cover and returns the cover the feed shows.
+create function pg_temp.cover_after(url text) returns text language sql as $$
+  select publish_book(pg_temp.book('aaaaaaaa-0000-0000-0000-000000000004', 'to_read', cover => url));
+  select cover_url from feed('friends') where book_id = 'aaaaaaaa-0000-0000-0000-000000000004';
+$$;
 
 set local role authenticated;
 
@@ -145,10 +150,6 @@ select throws_ok($$select publish_book(pg_temp.book('aaaaaaaa-0000-0000-0000-000
 select throws_ok($$select publish_book(pg_temp.book('aaaaaaaa-0000-0000-0000-000000000009', 'read', review => repeat('x', 2001)))$$, '22023', null, 'validation_errors: review');
 select throws_ok($$select publish_book(pg_temp.book('aaaaaaaa-0000-0000-0000-000000000009', 'shelved'))$$, '22023', null, 'validation_errors: status');
 
-create function pg_temp.cover_after(url text) returns text language sql as $$
-  select publish_book(pg_temp.book('aaaaaaaa-0000-0000-0000-000000000004', 'to_read', cover => url));
-  select cover_url from feed('friends') where book_id = 'aaaaaaaa-0000-0000-0000-000000000004';
-$$;
 select is(pg_temp.cover_after('https://books.google.com/books/content?id=x&img=1'), 'https://books.google.com/books/content?id=x&img=1', 'cover_allow_list: google');
 select is(pg_temp.cover_after('https://books.googleusercontent.com/x.jpg'), 'https://books.googleusercontent.com/x.jpg', 'cover_allow_list: googleusercontent');
 select is(pg_temp.cover_after('https://covers.openlibrary.org/b/isbn/1-L.jpg'), 'https://covers.openlibrary.org/b/isbn/1-L.jpg', 'cover_allow_list: open library');
