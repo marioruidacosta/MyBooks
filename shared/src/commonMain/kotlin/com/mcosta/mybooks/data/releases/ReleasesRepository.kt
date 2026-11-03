@@ -18,6 +18,12 @@ import kotlin.time.Instant
 /** A value and when it was downloaded; [offline] means the download failed and this is the saved copy. */
 data class Cached<T>(val value: T, val savedAt: Instant, val offline: Boolean)
 
+/** One month's books (or some of them). */
+data class MonthBooks(val month: String, val complete: Boolean, val books: List<ReleaseBook>)
+
+/** Every month's books, newest first; [missing] months couldn't be loaded; [savedAt] is set when a saved copy is shown. */
+data class AllMonths(val months: List<MonthBooks>, val missing: List<String>, val savedAt: Instant?)
+
 /**
  * New in Portugal's lists, saved on the phone. The index and the month in progress are re-downloaded when
  * older than 6 hours, past months after 24 hours; without a network the saved copy is used.
@@ -51,6 +57,29 @@ class ReleasesRepository(
             // Keys computed once per book, not per comparison.
             json.decodeFromString<MonthJson>(text).books.map { searchKey(it.title) to it }.sortedBy { it.first }.map { it.second }
         }
+    }
+
+    /**
+     * Every listed month's books, newest month first. A month that can't be loaded is skipped and named in
+     * [AllMonths.missing]; only the month list failing throws. [onProgress] gets (months done, months listed).
+     */
+    suspend fun allMonths(onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): AllMonths {
+        val index = months()
+        val loaded = mutableListOf<MonthBooks>()
+        val missing = mutableListOf<String>()
+        var savedAt = index.savedAt.takeIf { index.offline }
+        onProgress(0, index.value.size)
+        index.value.forEachIndexed { i, month ->
+            try {
+                val books = books(month.month)
+                loaded += MonthBooks(month.month, month.complete, books.value)
+                if (books.offline) savedAt = listOfNotNull(savedAt, books.savedAt).min()
+            } catch (e: ReleasesUnavailable) {
+                missing += month.month
+            }
+            onProgress(i + 1, index.value.size)
+        }
+        return AllMonths(loaded, missing, savedAt)
     }
 
     /** The month as listed in the saved index (no download), or null. */

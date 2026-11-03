@@ -5,6 +5,7 @@ import com.mcosta.mybooks.data.BookRepository
 import com.mcosta.mybooks.data.FakeBookDao
 import com.mcosta.mybooks.data.lookup.BookLookupService
 import com.mcosta.mybooks.data.lookup.LookupResult
+import com.mcosta.mybooks.data.releases.NameCount
 import com.mcosta.mybooks.data.releases.ReleaseFilter
 import com.mcosta.mybooks.data.releases.ReleaseGenre
 import com.mcosta.mybooks.data.releases.openLibraryCover
@@ -238,5 +239,72 @@ class ReleasesViewModelsTest : MainDispatcherTest() {
     fun publisherBookList() = runTest {
         val vm = ReleaseGenreViewModel(releases, "2026-10", ReleaseFilter.Publisher("Documenta")).loaded()
         assertEquals(listOf("A casa de cal"), vm.state.value.books.map { it.title })
+    }
+
+    private val november = """{"version":1,"month":"2026-11","updated":"x","books":[
+        {"id":"9001","isbn":"9789720000001","title":"Extinção","authors":["Thomas Bernhard"],"publisher":"Relógio d'Água","genre":"novel"},
+        {"id":"9002","isbn":"9789720000002","title":"Contos","authors":["Edgar Allan Poe"],"publisher":"Presença","genre":"stories"}]}"""
+    private suspend fun ReleasesSearchViewModel.loaded() = also { state.first { !it.loading } }
+
+    @Test
+    fun searchCountsAcrossAllMonths() = runTest {
+        files["2026-11.json"] = november
+        val vm = ReleasesSearchViewModel(releases).loaded()
+        assertEquals(2, vm.state.value.loaded)
+        assertEquals(2, vm.state.value.total)
+        vm.setQuery("bernhard")
+        assertEquals(listOf(NameCount("Thomas Bernhard", "Thomas Bernhard", 2)), vm.state.value.results.authors)
+        vm.setQuery("RELOGIO")
+        assertEquals(listOf(NameCount("Relógio d'Água", "Relógio d'Água", 2)), vm.state.value.results.publishers)
+    }
+
+    @Test
+    fun searchMatchesAuthorsPublishersAndGenresAtOnce() = runTest {
+        files["2026-11.json"] = november
+        val vm = ReleasesSearchViewModel(releases).loaded()
+        vm.setQuery("poe")
+        val r = vm.state.value.results
+        assertEquals(listOf("Edgar Allan Poe"), r.authors.map { it.label })
+        assertEquals(emptyList(), r.publishers)
+        assertEquals(listOf(NameCount("poetry", "Poetry", 1)), r.genres)
+    }
+
+    @Test
+    fun blankSearchShowsNoResults() = runTest {
+        files["2026-11.json"] = november
+        val vm = ReleasesSearchViewModel(releases).loaded()
+        vm.setQuery("  ")
+        assertTrue(vm.state.value.results.isEmpty)
+    }
+
+    @Test
+    fun searchReportsMissingMonthAndRetries() = runTest {
+        val vm = ReleasesSearchViewModel(releases).loaded()     // no November file
+        assertEquals(listOf("2026-11"), vm.state.value.missing)
+        vm.setQuery("bernhard")
+        assertEquals(1, vm.state.value.results.authors.single().count)
+        files["2026-11.json"] = november
+        vm.retry()
+        vm.loaded()
+        assertEquals(emptyList(), vm.state.value.missing)
+        assertEquals(2, vm.state.value.results.authors.single().count)
+    }
+
+    @Test
+    fun allMonthsBookListGroupedNewestFirst() = runTest {
+        files["2026-11.json"] = november
+        val vm = ReleaseGenreViewModel(releases, null, ReleaseFilter.Author("Thomas Bernhard")).loaded()
+        val groups = vm.state.value.groups
+        assertEquals(listOf("2026-11", "2026-10"), groups.map { it.month })
+        assertEquals(listOf(false, true), groups.map { it.complete })
+        assertEquals(listOf(listOf("Extinção"), listOf("A casa de cal")), groups.map { g -> g.books.map { it.title } })
+    }
+
+    @Test
+    fun allMonthsGenreListSkipsMonthsWithoutBooks() = runTest {
+        files["2026-11.json"] = november
+        val vm = ReleaseGenreViewModel(releases, null, ReleaseFilter.Genre(ReleaseGenre.POETRY)).loaded()
+        assertEquals(listOf("2026-10"), vm.state.value.groups.map { it.month })
+        assertEquals(listOf("Marés"), vm.state.value.books.map { it.title })
     }
 }
