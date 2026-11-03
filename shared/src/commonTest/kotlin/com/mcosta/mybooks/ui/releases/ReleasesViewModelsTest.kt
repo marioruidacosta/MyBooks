@@ -5,6 +5,7 @@ import com.mcosta.mybooks.data.BookRepository
 import com.mcosta.mybooks.data.FakeBookDao
 import com.mcosta.mybooks.data.lookup.BookLookupService
 import com.mcosta.mybooks.data.lookup.LookupResult
+import com.mcosta.mybooks.data.releases.ReleaseFilter
 import com.mcosta.mybooks.data.releases.ReleaseGenre
 import com.mcosta.mybooks.data.releases.openLibraryCover
 import com.mcosta.mybooks.data.releases.ReleasesClient
@@ -201,5 +202,41 @@ class ReleasesViewModelsTest : MainDispatcherTest() {
         assertEquals("https://rnod.bnportugal.gov.pt/ImagesBN/x.jpg", vm.state.value.coverUrl)
         assertEquals("https://rnod.bnportugal.gov.pt/ImagesBN/x.jpg", releases.books("2026-11").value.single().listCover)
         assertEquals(openLibraryCover("9789895682799"), releases.books("2026-10").value.first().listCover)
+    }
+
+    @Test
+    fun publisherViewListsTheMonthsPublishers() = runTest {
+        val vm = ReleasesViewModel(releases).loaded()
+        vm.select("2026-10")
+        vm.setView(ReleaseView.PUBLISHER)
+        vm.state.first { !it.namesLoading }
+        val names = vm.state.value.names
+        assertEquals(8, names.sumOf { it.count })
+        assertTrue(names.any { it.label == "Documenta" })
+        vm.setQuery("documen")
+        assertEquals(listOf("Documenta"), vm.state.value.shownNames.map { it.label })
+    }
+
+    @Test
+    fun authorViewAndBackToGenre() = runTest {
+        val vm = ReleasesViewModel(releases).loaded()
+        vm.select("2026-10")
+        vm.setView(ReleaseView.AUTHOR)
+        vm.state.first { !it.namesLoading }
+        assertTrue(vm.state.value.names.any { it.label == "Thomas Bernhard" })
+        vm.setView(ReleaseView.GENRE)
+        assertEquals(ReleaseView.GENRE, vm.state.value.view)
+    }
+
+    @Test
+    fun authorBookList() = runTest {
+        val vm = ReleaseGenreViewModel(releases, "2026-10", ReleaseFilter.Author("Thomas Bernhard")).loaded()
+        assertEquals(listOf("A casa de cal"), vm.state.value.books.map { it.title })
+    }
+
+    @Test
+    fun publisherBookList() = runTest {
+        val vm = ReleaseGenreViewModel(releases, "2026-10", ReleaseFilter.Publisher("Documenta")).loaded()
+        assertEquals(listOf("A casa de cal"), vm.state.value.books.map { it.title })
     }
 }

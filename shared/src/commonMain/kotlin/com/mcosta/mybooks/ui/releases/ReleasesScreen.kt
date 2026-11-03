@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -22,6 +23,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -32,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mcosta.mybooks.data.releases.NameCount
 import com.mcosta.mybooks.data.releases.ReleaseGenre
 import com.mcosta.mybooks.data.releases.monthLabel
 import com.mcosta.mybooks.ui.formatDateTime
@@ -39,7 +45,13 @@ import kotlin.time.Instant
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReleasesScreen(viewModel: ReleasesViewModel, onBack: () -> Unit, onOpenGenre: (month: String, genre: ReleaseGenre) -> Unit) {
+fun ReleasesScreen(
+    viewModel: ReleasesViewModel,
+    onBack: () -> Unit,
+    onOpenGenre: (month: String, genre: ReleaseGenre) -> Unit,
+    /** An author's or publisher's books: the month, the view (Author or Publisher) and the name. */
+    onOpenName: (month: String, view: ReleaseView, name: NameCount) -> Unit,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Scaffold(
         topBar = {
@@ -71,15 +83,51 @@ fun ReleasesScreen(viewModel: ReleasesViewModel, onBack: () -> Unit, onOpenGenre
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                     SavedNote(state.savedAt)
-                    val selected = state.selected
-                    LazyColumn(Modifier.fillMaxSize()) {
-                        items(selected?.genres.orEmpty(), key = { it.first.key }) { (genre, count) ->
-                            ListItem(
-                                headlineContent = { Text("${genre.label} · $count") },
-                                trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) },
-                                modifier = Modifier.clickable { onOpenGenre(selected!!.month, genre) },
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        ReleaseView.entries.forEachIndexed { i, view ->
+                            SegmentedButton(
+                                selected = state.view == view,
+                                onClick = { viewModel.setView(view) },
+                                shape = SegmentedButtonDefaults.itemShape(i, ReleaseView.entries.size),
+                                label = { Text(view.label) },
                             )
-                            HorizontalDivider()
+                        }
+                    }
+                    val selected = state.selected
+                    if (state.view == ReleaseView.GENRE) {
+                        LazyColumn(Modifier.fillMaxSize()) {
+                            items(selected?.genres.orEmpty(), key = { it.first.key }) { (genre, count) ->
+                                ListItem(
+                                    headlineContent = { Text("${genre.label} · $count") },
+                                    trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) },
+                                    modifier = Modifier.clickable { onOpenGenre(selected!!.month, genre) },
+                                )
+                                HorizontalDivider()
+                            }
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = state.query,
+                            onValueChange = viewModel::setQuery,
+                            placeholder = { Text(if (state.view == ReleaseView.AUTHOR) "Search authors" else "Search publishers") },
+                            leadingIcon = { Icon(Icons.Filled.Search, null) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        )
+                        when {
+                            state.namesLoading && state.names.isEmpty() ->
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                            state.namesError != null && state.names.isEmpty() -> Message(state.namesError!!, onRetry = viewModel::loadNames)
+                            else -> LazyColumn(Modifier.fillMaxSize()) {
+                                items(state.shownNames, key = { it.key }) { name ->
+                                    ListItem(
+                                        headlineContent = { Text("${name.label} · ${name.count}") },
+                                        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) },
+                                        modifier = Modifier.clickable { onOpenName(selected!!.month, state.view, name) },
+                                    )
+                                    HorizontalDivider()
+                                }
+                            }
                         }
                     }
                 }

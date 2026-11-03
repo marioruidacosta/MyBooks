@@ -14,6 +14,8 @@ import com.mcosta.mybooks.AppContainer
 import com.mcosta.mybooks.platform.ScanOutcome
 import com.mcosta.mybooks.share.SharingState
 import com.mcosta.mybooks.social.model.SessionState
+import com.mcosta.mybooks.data.releases.NOT_STATED
+import com.mcosta.mybooks.data.releases.ReleaseFilter
 import com.mcosta.mybooks.data.releases.ReleaseGenre
 import com.mcosta.mybooks.ui.releases.ReleaseBookScreen
 import com.mcosta.mybooks.ui.releases.ReleaseBookViewModel
@@ -21,6 +23,8 @@ import com.mcosta.mybooks.ui.releases.ReleaseGenreScreen
 import com.mcosta.mybooks.ui.releases.ReleaseGenreViewModel
 import com.mcosta.mybooks.ui.releases.ReleasesScreen
 import com.mcosta.mybooks.ui.releases.ReleasesViewModel
+import com.mcosta.mybooks.ui.releases.ReleaseView
+import io.ktor.http.encodeURLPathPart
 import com.mcosta.mybooks.ui.social.AccountRoute
 import com.mcosta.mybooks.ui.social.ActivityScreen
 import com.mcosta.mybooks.ui.social.ActivityViewModel
@@ -50,6 +54,8 @@ object Routes {
     const val RELEASES = "releases"
     const val RELEASE_GENRE = "releases/{month}/{genre}"
     const val RELEASE_BOOK = "releases/{month}/book/{id}"
+    const val RELEASE_AUTHOR = "releases/{month}/author/{name}"
+    const val RELEASE_PUBLISHER = "releases/{month}/publisher/{name}"
     const val PROFILE = "profile/{id}"
     const val ACCOUNT = "account"
 
@@ -60,6 +66,9 @@ object Routes {
     fun friends(tab: Int = 0) = "friends?tab=$tab"
     fun releaseGenre(month: String, genre: String) = "releases/$month/$genre"
     fun releaseBook(month: String, id: String) = "releases/$month/book/$id"
+    /** An author's or publisher's books; the name is URL-encoded (it may contain spaces, accents or slashes). */
+    fun releaseName(month: String, view: ReleaseView, name: String) =
+        "releases/$month/${if (view == ReleaseView.AUTHOR) "author" else "publisher"}/${name.encodeURLPathPart()}"
 }
 
 @Composable
@@ -127,6 +136,7 @@ fun MyBooksNavHost(container: AppContainer) {
                 viewModel = viewModel { ReleasesViewModel(container.releases) },
                 onBack = { nav.popBackStack() },
                 onOpenGenre = { month, genre -> nav.navigate(Routes.releaseGenre(month, genre.key)) },
+                onOpenName = { month, view, name -> nav.navigate(Routes.releaseName(month, view, name.key)) },
             )
         }
         composable(
@@ -142,6 +152,28 @@ fun MyBooksNavHost(container: AppContainer) {
                 onBack = { nav.popBackStack() },
                 onOpenBook = { id -> nav.navigate(Routes.releaseBook(month, id)) },
             )
+        }
+        for ((route, view) in listOf(Routes.RELEASE_AUTHOR to ReleaseView.AUTHOR, Routes.RELEASE_PUBLISHER to ReleaseView.PUBLISHER)) {
+            composable(
+                route,
+                arguments = listOf(navArgument("month") { type = NavType.StringType }, navArgument("name") { type = NavType.StringType }),
+            ) { entry ->
+                val month = entry.savedStateHandle.get<String>("month")!!
+                val name = entry.savedStateHandle.get<String>("name")!!
+                val filter = if (view == ReleaseView.AUTHOR) ReleaseFilter.Author(name) else ReleaseFilter.Publisher(name)
+                val title = when {
+                    name != NOT_STATED -> name
+                    view == ReleaseView.AUTHOR -> "Author not stated"
+                    else -> "Publisher not stated"
+                }
+                ReleaseGenreScreen(
+                    viewModel = viewModel { ReleaseGenreViewModel(container.releases, month, filter) },
+                    title = title,
+                    month = month,
+                    onBack = { nav.popBackStack() },
+                    onOpenBook = { id -> nav.navigate(Routes.releaseBook(month, id)) },
+                )
+            }
         }
         composable(
             Routes.RELEASE_BOOK,
