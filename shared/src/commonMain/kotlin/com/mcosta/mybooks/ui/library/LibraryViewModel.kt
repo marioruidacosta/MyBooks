@@ -50,10 +50,10 @@ class LibraryViewModel(
         query.value = q
     }
 
-    /** Sorts this tab by [order], in its usual direction: A to Z, or highest score first. */
+    /** Sorts this tab by [order], in its usual direction: A to Z, or newest or highest score first. */
     fun setSort(order: LibrarySort) {
         if (order == LibrarySort.SCORE && tab.value != ReadingStatus.READ) return
-        save(SortChoice(order, descending = order == LibrarySort.SCORE))
+        save(SortChoice(order, descending = order.newestOrHighestFirst))
     }
 
     fun setDescending(descending: Boolean) = save(sorts.value.getValue(tab.value).copy(descending = descending))

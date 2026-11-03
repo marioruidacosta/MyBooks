@@ -55,7 +55,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
         val vm = LibraryViewModel(repo, prefs)
         backgroundScope.launch(mainDispatcher) { vm.state.collect {} }
 
-        assertEquals(listOf(LibrarySort.TITLE, LibrarySort.AUTHOR, LibrarySort.PUBLISHER), vm.state.value.sorts)
+        assertEquals(listOf(LibrarySort.TITLE, LibrarySort.AUTHOR, LibrarySort.PUBLISHER, LibrarySort.DATE_ADDED), vm.state.value.sorts)
         vm.setSort(LibrarySort.AUTHOR)
         assertEquals(listOf("Emma", "Persuasion", "Dune"), vm.state.value.books.map { it.title })
         vm.setDescending(true)
@@ -96,5 +96,14 @@ class LibraryViewModelTest : MainDispatcherTest() {
         vm.setSort(LibrarySort.PUBLISHER)
         vm.setQuery("austen")
         assertEquals(listOf("Emma", "Persuasion"), vm.state.value.books.map { it.title })
+    }
+
+    @Test
+    fun dateAddedIsOfferedOnEveryShelfAndStartsNewestFirst() = runTest {
+        val vm = LibraryViewModel(repo, MemoryPreferences(), ReadingStatus.TO_READ)
+        backgroundScope.launch(mainDispatcher) { vm.state.collect {} }
+        assertEquals(listOf(LibrarySort.TITLE, LibrarySort.AUTHOR, LibrarySort.PUBLISHER, LibrarySort.DATE_ADDED), vm.state.value.sorts)
+        vm.setSort(LibrarySort.DATE_ADDED)
+        assertEquals(SortChoice(LibrarySort.DATE_ADDED, descending = true), vm.state.value.sort)
     }
 }
