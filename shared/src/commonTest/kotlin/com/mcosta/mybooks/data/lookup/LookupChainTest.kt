@@ -1,6 +1,7 @@
 package com.mcosta.mybooks.data.lookup
 
 import com.mcosta.mybooks.domain.Book
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -63,5 +64,47 @@ class LookupChainTest {
     @Test
     fun allErrorIsError() = runTest {
         assertTrue(LookupChain(listOf(Fixed(error), Fixed(error))).lookup("x") is LookupResult.Error)
+    }
+
+    /** Answers [result] after [millis] (virtual time), counting how many lookups are running at once. */
+    private class Slow(val result: LookupResult, val millis: Long, val running: IntArray) : BookLookupService {
+        override suspend fun lookup(isbn: String): LookupResult {
+            running[0]++
+            running[1] = maxOf(running[1], running[0])
+            delay(millis)
+            running[0]--
+            return result
+        }
+    }
+
+    @Test
+    fun coverAsksAllSourcesAtOnce() = runTest {
+        val running = IntArray(2)
+        val chain = LookupChain(listOf(Slow(miss, 1000, running), Slow(error, 1000, running), Slow(otherWithCover, 1000, running)))
+        val start = testScheduler.currentTime
+        assertEquals("https://google/cover.jpg", chain.lookupCover("x")?.coverUrl)
+        assertEquals(3, running[1])
+        assertEquals(1000, testScheduler.currentTime - start)        // the slowest source, not the sum
+    }
+
+    @Test
+    fun coverPrefersEarlierSourcesEvenWhenSlower() = runTest {
+        val running = IntArray(2)
+        val chain = LookupChain(listOf(Slow(withCover, 2000, running), Slow(otherWithCover, 100, running)))
+        assertEquals("https://bnp/cover.jpg", chain.lookupCover("x")?.coverUrl)
+    }
+
+    @Test
+    fun coverDoesNotWaitForLaterSourcesOnceAnEarlierOneHasIt() = runTest {
+        val running = IntArray(2)
+        val chain = LookupChain(listOf(Slow(withCover, 100, running), Slow(otherWithCover, 5000, running)))
+        val start = testScheduler.currentTime
+        assertEquals("https://bnp/cover.jpg", chain.lookupCover("x")?.coverUrl)
+        assertEquals(100, testScheduler.currentTime - start)
+    }
+
+    @Test
+    fun noCoverAnywhere() = runTest {
+        assertEquals(null, LookupChain(listOf(Fixed(noCover), Fixed(miss), Fixed(error))).lookupCover("x"))
     }
 }

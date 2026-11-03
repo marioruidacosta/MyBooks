@@ -160,10 +160,13 @@ class BookRepositoryGoodreadsTest {
                 return LookupResult.Found(Book(title = "x", coverUrl = "https://covers.test/$isbn.jpg"))
             }
         })
-        val isbns = listOf("9780441013593", "9789895682799", "9789722378482", "9789722020770", "9789726083962", "9789895894475")
+        val isbns = listOf(
+            "9780441013593", "9789895682799", "9789722378482", "9789722020770", "9789726083962", "9789895894475",
+            "9789726084884", "9789896410193", "9789726627821", "9789725648506",
+        )
         for (isbn in isbns) slow.save(Book(title = isbn, isbn = isbn))
-        assertEquals(6, slow.findMissingCovers(parallel = 4))
-        assertEquals(4, most)
+        assertEquals(10, slow.findMissingCovers())
+        assertEquals(8, most)
         assertEquals("https://covers.test/9789726083962.jpg", slow.findByIsbn("9789726083962")!!.coverUrl)
     }
 }

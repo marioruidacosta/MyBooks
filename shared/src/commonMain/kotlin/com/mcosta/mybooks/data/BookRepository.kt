@@ -272,13 +272,13 @@ class BookRepository(
     }
 
     /**
-     * Looks up a cover for every book with an ISBN and no cover, [parallel] books at a time (each asks up to three
-     * sources in turn, so one at a time takes minutes), with the same sources as adding a book; an empty
+     * Looks up a cover for every book with an ISBN and no cover, [parallel] books at a time (one at a time took
+     * minutes), with the same sources as adding a book, asked at once; an empty
      * description and page count are filled in too. Like an import, this isn't posted to the community.
      * [onProgress] gets (books done, books to look up, covers found). Returns the covers found.
      */
     suspend fun findMissingCovers(
-        parallel: Int = 4,
+        parallel: Int = 8,
         onProgress: (done: Int, total: Int, found: Int) -> Unit = { _, _, _ -> },
     ): Int {
         val todo = dao.getAll().map { it.toBook() }.filter { it.isbn != null && it.coverUrl == null }.map { it.id }
@@ -292,7 +292,7 @@ class BookRepository(
                 launch {
                     slots.withPermit {
                         val isbn = dao.getById(id)?.toBook()?.takeIf { it.coverUrl == null }?.isbn
-                        val match = isbn?.let { (lookupService.lookup(it) as? LookupResult.Found)?.book }
+                        val match = isbn?.let { lookupService.lookupCover(it) }
                         writes.withLock {
                             // Read again: the book may have been edited or deleted during the lookup.
                             val book = dao.getById(id)?.toBook()

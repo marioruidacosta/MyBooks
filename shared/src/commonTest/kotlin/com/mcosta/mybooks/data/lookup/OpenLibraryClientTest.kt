@@ -74,4 +74,13 @@ class OpenLibraryClientTest {
         server.enqueue(FakeResponse().setResponseCode(503))
         assertTrue(client.lookup("9780151446476") is LookupResult.Error)
     }
+
+    /** Looking only for a cover skips the author requests. */
+    @Test
+    fun coverLookupMakesOneRequest() = runTest {
+        server.enqueue(json("openlibrary_edition_with_cover.json"))
+        assertEquals("https://covers.example/b/id/14565843-L.jpg", client.lookupCover("9789726084884")?.coverUrl)
+        assertEquals("/isbn/9789726084884.json", server.takeRequest().path)
+        assertEquals(0, server.requestCount)          // no author requests
+    }
 }
