@@ -22,6 +22,8 @@ import com.mcosta.mybooks.ui.releases.ReleaseBookViewModel
 import com.mcosta.mybooks.ui.releases.ReleaseGenreScreen
 import com.mcosta.mybooks.ui.releases.ReleaseGenreViewModel
 import com.mcosta.mybooks.ui.releases.ReleasesScreen
+import com.mcosta.mybooks.ui.releases.ReleasesSearchScreen
+import com.mcosta.mybooks.ui.releases.ReleasesSearchViewModel
 import com.mcosta.mybooks.ui.releases.ReleasesViewModel
 import com.mcosta.mybooks.ui.releases.ReleaseView
 import io.ktor.http.encodeURLPathPart
@@ -56,6 +58,10 @@ object Routes {
     const val RELEASE_BOOK = "releases/{month}/book/{id}"
     const val RELEASE_AUTHOR = "releases/{month}/author/{name}"
     const val RELEASE_PUBLISHER = "releases/{month}/publisher/{name}"
+    const val RELEASE_SEARCH = "releases/search"
+
+    /** The {month} of a release list covering every month. */
+    const val ALL_MONTHS = "all"
     const val PROFILE = "profile/{id}"
     const val ACCOUNT = "account"
 
@@ -137,20 +143,21 @@ fun MyBooksNavHost(container: AppContainer) {
                 onBack = { nav.popBackStack() },
                 onOpenGenre = { month, genre -> nav.navigate(Routes.releaseGenre(month, genre.key)) },
                 onOpenName = { month, view, name -> nav.navigate(Routes.releaseName(month, view, name.key)) },
+                onSearch = { nav.navigate(Routes.RELEASE_SEARCH) },
             )
         }
         composable(
             Routes.RELEASE_GENRE,
             arguments = listOf(navArgument("month") { type = NavType.StringType }, navArgument("genre") { type = NavType.StringType }),
         ) { entry ->
-            val month = entry.savedStateHandle.get<String>("month")!!
+            val month = entry.savedStateHandle.get<String>("month")!!.takeUnless { it == Routes.ALL_MONTHS }
             val genre = ReleaseGenre.of(entry.savedStateHandle.get<String>("genre")!!)
             ReleaseGenreScreen(
-                viewModel = viewModel { ReleaseGenreViewModel(container.releases, month, genre) },
+                viewModel = viewModel { ReleaseGenreViewModel(container.releases, month, ReleaseFilter.Genre(genre)) },
                 title = genre.label,
                 month = month,
                 onBack = { nav.popBackStack() },
-                onOpenBook = { id -> nav.navigate(Routes.releaseBook(month, id)) },
+                onOpenBook = { bookMonth, id -> nav.navigate(Routes.releaseBook(bookMonth, id)) },
             )
         }
         for ((route, view) in listOf(Routes.RELEASE_AUTHOR to ReleaseView.AUTHOR, Routes.RELEASE_PUBLISHER to ReleaseView.PUBLISHER)) {
@@ -158,7 +165,7 @@ fun MyBooksNavHost(container: AppContainer) {
                 route,
                 arguments = listOf(navArgument("month") { type = NavType.StringType }, navArgument("name") { type = NavType.StringType }),
             ) { entry ->
-                val month = entry.savedStateHandle.get<String>("month")!!
+                val month = entry.savedStateHandle.get<String>("month")!!.takeUnless { it == Routes.ALL_MONTHS }
                 val name = entry.savedStateHandle.get<String>("name")!!
                 val filter = if (view == ReleaseView.AUTHOR) ReleaseFilter.Author(name) else ReleaseFilter.Publisher(name)
                 val title = when {
@@ -171,9 +178,20 @@ fun MyBooksNavHost(container: AppContainer) {
                     title = title,
                     month = month,
                     onBack = { nav.popBackStack() },
-                    onOpenBook = { id -> nav.navigate(Routes.releaseBook(month, id)) },
+                    onOpenBook = { bookMonth, id -> nav.navigate(Routes.releaseBook(bookMonth, id)) },
                 )
             }
+        }
+        composable(Routes.RELEASE_SEARCH) {
+            ReleasesSearchScreen(
+                viewModel = viewModel { ReleasesSearchViewModel(container.releases) },
+                onBack = { nav.popBackStack() },
+                onOpen = { view, key ->
+                    nav.navigate(
+                        if (view == ReleaseView.GENRE) Routes.releaseGenre(Routes.ALL_MONTHS, key) else Routes.releaseName(Routes.ALL_MONTHS, view, key),
+                    )
+                },
+            )
         }
         composable(
             Routes.RELEASE_BOOK,

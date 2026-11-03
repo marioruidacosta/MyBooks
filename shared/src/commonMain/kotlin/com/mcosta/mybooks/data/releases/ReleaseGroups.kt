@@ -43,6 +43,11 @@ fun publisherCounts(books: List<ReleaseBook>): List<NameCount> =
     counts(books.map { it.publisherKey() }, "Publisher not stated")
         .sortedWith(compareBy({ it.key == NOT_STATED }, { -it.count }, { searchKey(it.label) }))
 
+/** The genres with books, in display order; the key is [ReleaseGenre.key]. */
+fun genreCounts(books: List<ReleaseBook>): List<NameCount> =
+    books.groupingBy { it.genreType }.eachCount().toList().sortedBy { it.first.ordinal }
+        .map { (genre, n) -> NameCount(genre.key, genre.label, n) }
+
 /** The names containing [query], ignoring case and accents; everything for a blank query. */
 fun List<NameCount>.search(query: String): List<NameCount> {
     val q = searchKey(query.trim())

@@ -35,12 +35,19 @@ import com.mcosta.mybooks.data.releases.monthLabel
 import com.mcosta.mybooks.ui.currentMonth
 import com.mcosta.mybooks.ui.components.BookCover
 
+/** One month's books, or with a null [month] every month's, under month headings; [onOpenBook] gets (month, book id). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReleaseGenreScreen(viewModel: ReleaseGenreViewModel, title: String, month: String, onBack: () -> Unit, onOpenBook: (String) -> Unit) {
+fun ReleaseGenreScreen(
+    viewModel: ReleaseGenreViewModel,
+    title: String,
+    month: String?,
+    onBack: () -> Unit,
+    onOpenBook: (month: String, id: String) -> Unit,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     // Completeness from the saved month list; the clock only until that is known.
-    val subtitle = monthLabel(month, state.monthComplete ?: (month < currentMonth()))
+    val subtitle = if (month == null) "All months" else monthLabel(month, state.monthComplete ?: (month < currentMonth()))
     Scaffold(
         topBar = {
             TopAppBar(
@@ -60,10 +67,23 @@ fun ReleaseGenreScreen(viewModel: ReleaseGenreViewModel, title: String, month: S
                 state.books.isEmpty() && state.error != null -> Message(state.error!!, onRetry = viewModel::retry)
                 else -> Column(Modifier.fillMaxSize()) {
                     SavedNote(state.savedAt)
+                    if (state.missing.isNotEmpty()) MissingNote(state.missing, onRetry = viewModel::retry)
                     LazyColumn(Modifier.fillMaxSize()) {
-                        items(state.books, key = { it.id }) { book ->
-                            BookRow(book, onClick = { onOpenBook(book.id) })
-                            HorizontalDivider()
+                        for (group in state.groups) {
+                            if (month == null) {
+                                item(key = group.month) {
+                                    Text(
+                                        monthLabel(group.month, group.complete),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+                                    )
+                                }
+                            }
+                            items(group.books, key = { "${group.month}/${it.id}" }) { book ->
+                                BookRow(book, onClick = { onOpenBook(group.month, book.id) })
+                                HorizontalDivider()
+                            }
                         }
                     }
                 }
