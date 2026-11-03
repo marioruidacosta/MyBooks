@@ -3,6 +3,8 @@ package com.mcosta.mybooks.ui.releases
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mcosta.mybooks.data.releases.ReleaseBook
+import com.mcosta.mybooks.data.releases.ReleaseFilter
+import com.mcosta.mybooks.data.releases.matches
 import com.mcosta.mybooks.data.releases.ReleaseGenre
 import com.mcosta.mybooks.data.releases.ReleasesRepository
 import com.mcosta.mybooks.data.releases.ReleasesUnavailable
@@ -23,12 +25,14 @@ data class GenreBooksState(
     val monthComplete: Boolean? = null,
 )
 
-/** One genre's new books in one month, A–Z. */
+/** One month's new books of one genre, author or publisher, A–Z. */
 class ReleaseGenreViewModel(
     private val repo: ReleasesRepository,
     private val month: String,
-    private val genre: ReleaseGenre,
+    private val filter: ReleaseFilter,
 ) : ViewModel() {
+    constructor(repo: ReleasesRepository, month: String, genre: ReleaseGenre) : this(repo, month, ReleaseFilter.Genre(genre))
+
     private val _state = MutableStateFlow(GenreBooksState())
     val state: StateFlow<GenreBooksState> = _state.asStateFlow()
 
@@ -45,7 +49,7 @@ class ReleaseGenreViewModel(
             try {
                 val cached = repo.books(month)
                 _state.update {
-                    it.copy(books = cached.value.filter { b -> b.genreType == genre }, savedAt = cached.savedAt.takeIf { cached.offline })
+                    it.copy(books = cached.value.filter { b -> b.matches(filter) }, savedAt = cached.savedAt.takeIf { cached.offline })
                 }
             } catch (e: ReleasesUnavailable) {
                 _state.update { it.copy(error = LOAD_ERROR) }
