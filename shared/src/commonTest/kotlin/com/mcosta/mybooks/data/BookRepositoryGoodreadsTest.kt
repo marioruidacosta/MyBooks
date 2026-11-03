@@ -8,6 +8,7 @@ import com.mcosta.mybooks.data.lookup.LookupResult
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.testing.fixture
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -144,5 +145,25 @@ class BookRepositoryGoodreadsTest {
         assertEquals(setOf("Emma", "Dune"), back.map { it.title }.toSet())
         assertEquals(ReadingStatus.WISHLIST, back.first { it.title == "Emma" }.status)
         assertEquals(5, back.first { it.title == "Dune" }.rating)
+    }
+
+    @Test
+    fun findMissingCoversLooksUpSeveralBooksAtOnce() = runTest {
+        var running = 0
+        var most = 0
+        val slow = BookRepository(FakeBookDao(), object : BookLookupService {
+            override suspend fun lookup(isbn: String): LookupResult {
+                running++
+                most = maxOf(most, running)
+                delay(1000)
+                running--
+                return LookupResult.Found(Book(title = "x", coverUrl = "https://covers.test/$isbn.jpg"))
+            }
+        })
+        val isbns = listOf("9780441013593", "9789895682799", "9789722378482", "9789722020770", "9789726083962", "9789895894475")
+        for (isbn in isbns) slow.save(Book(title = isbn, isbn = isbn))
+        assertEquals(6, slow.findMissingCovers(parallel = 4))
+        assertEquals(4, most)
+        assertEquals("https://covers.test/9789726083962.jpg", slow.findByIsbn("9789726083962")!!.coverUrl)
     }
 }

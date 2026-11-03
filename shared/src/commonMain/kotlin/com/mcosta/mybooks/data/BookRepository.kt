@@ -16,7 +16,13 @@ import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.Isbn
 import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.share.ShareTracker
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlin.time.Clock
@@ -266,25 +272,42 @@ class BookRepository(
     }
 
     /**
-     * Looks up a cover for every book with an ISBN and no cover, one at a time, with the same sources as adding a
-     * book; an empty description and page count are filled in too. Like an import, this isn't posted to the
-     * community. [onProgress] gets (books done, books to look up, covers found). Returns the covers found.
+     * Looks up a cover for every book with an ISBN and no cover, [parallel] books at a time (each asks up to three
+     * sources in turn, so one at a time takes minutes), with the same sources as adding a book; an empty
+     * description and page count are filled in too. Like an import, this isn't posted to the community.
+     * [onProgress] gets (books done, books to look up, covers found). Returns the covers found.
      */
-    suspend fun findMissingCovers(onProgress: (done: Int, total: Int, found: Int) -> Unit = { _, _, _ -> }): Int {
+    suspend fun findMissingCovers(
+        parallel: Int = 4,
+        onProgress: (done: Int, total: Int, found: Int) -> Unit = { _, _, _ -> },
+    ): Int {
         val todo = dao.getAll().map { it.toBook() }.filter { it.isbn != null && it.coverUrl == null }.map { it.id }
+        val slots = Semaphore(parallel)
+        val writes = Mutex()
+        var done = 0
         var found = 0
         onProgress(0, todo.size, 0)
-        todo.forEachIndexed { i, id ->
-            val isbn = dao.getById(id)?.toBook()?.takeIf { it.coverUrl == null }?.isbn
-            val match = isbn?.let { (lookupService.lookup(it) as? LookupResult.Found)?.book }
-            // Read again: the book may have been edited or deleted during the lookup.
-            val book = dao.getById(id)?.toBook()
-            if (match?.coverUrl != null && book != null && book.coverUrl == null) {
-                val description = book.description ?: match.description
-                dao.update(book.copy(coverUrl = match.coverUrl, description = description, pageCount = book.pageCount ?: match.pageCount).toEntity())
-                found++
+        coroutineScope {
+            for (id in todo) {
+                launch {
+                    slots.withPermit {
+                        val isbn = dao.getById(id)?.toBook()?.takeIf { it.coverUrl == null }?.isbn
+                        val match = isbn?.let { (lookupService.lookup(it) as? LookupResult.Found)?.book }
+                        writes.withLock {
+                            // Read again: the book may have been edited or deleted during the lookup.
+                            val book = dao.getById(id)?.toBook()
+                            if (match?.coverUrl != null && book != null && book.coverUrl == null) {
+                                val description = book.description ?: match.description
+                                val pages = book.pageCount ?: match.pageCount
+                                dao.update(book.copy(coverUrl = match.coverUrl, description = description, pageCount = pages).toEntity())
+                                found++
+                            }
+                            done++
+                            onProgress(done, todo.size, found)
+                        }
+                    }
+                }
             }
-            onProgress(i + 1, todo.size, found)
         }
         return found
     }
