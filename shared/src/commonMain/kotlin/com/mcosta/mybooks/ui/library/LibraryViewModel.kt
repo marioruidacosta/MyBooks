@@ -19,7 +19,7 @@ data class LibraryState(
     val tab: ReadingStatus? = null,
     val query: String = "",
     val books: List<Book> = emptyList(),
-    val sort: LibrarySort = LibrarySort.TITLE,
+    val sort: SortChoice = SortChoice(),
 ) {
     /** The orders offered on this tab: Score only for Read books. */
     val sorts: List<LibrarySort> get() = if (tab == ReadingStatus.READ) LibrarySort.entries else LibrarySort.entries - LibrarySort.SCORE
@@ -33,13 +33,10 @@ class LibraryViewModel(
 ) : ViewModel() {
     private val tab = MutableStateFlow<ReadingStatus?>(null)
     private val query = MutableStateFlow("")
-    /** One order for All, Reading, To read and To buy; Read has its own (it alone offers Score). */
-    private val sort = MutableStateFlow(saved(SORT_KEY))
-    private val readSort = MutableStateFlow(saved(READ_SORT_KEY))
+    /** Each tab's own sort (All is the null tab), as saved. */
+    private val sorts = MutableStateFlow(TABS.associateWith { SortChoice.decode(prefs?.get(key(it))) ?: SortChoice() })
 
-    val state: StateFlow<LibraryState> = combine(tab, query, sort, readSort) { t, q, s, r ->
-        Triple(t, q, if (t == ReadingStatus.READ) r else s)
-    }
+    val state: StateFlow<LibraryState> = combine(tab, query, sorts) { t, q, s -> Triple(t, q, s.getValue(t)) }
         .flatMapLatest { (t, q, s) -> repo.observeBooks(t, q).map { LibraryState(t, q, it.sortedFor(s), s) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryState())
 
@@ -51,23 +48,24 @@ class LibraryViewModel(
         query.value = q
     }
 
+    /** Sorts this tab by [order], in its usual direction: A to Z, or highest score first. */
     fun setSort(order: LibrarySort) {
-        if (tab.value == ReadingStatus.READ) {
-            readSort.value = order
-            prefs?.set(READ_SORT_KEY, order.name)
-        } else if (order != LibrarySort.SCORE) {
-            sort.value = order
-            prefs?.set(SORT_KEY, order.name)
-        }
+        if (order == LibrarySort.SCORE && tab.value != ReadingStatus.READ) return
+        save(SortChoice(order, descending = order == LibrarySort.SCORE))
     }
+
+    fun setDescending(descending: Boolean) = save(sorts.value.getValue(tab.value).copy(descending = descending))
 
     suspend fun findByIsbn(isbn: String): Book? = repo.findByIsbn(isbn)
 
-    private fun saved(key: String): LibrarySort =
-        prefs?.get(key)?.let { name -> LibrarySort.entries.firstOrNull { it.name == name } } ?: LibrarySort.TITLE
+    private fun save(choice: SortChoice) {
+        val t = tab.value
+        sorts.value += t to choice
+        prefs?.set(key(t), choice.encode())
+    }
 
     private companion object {
-        const val SORT_KEY = "library.sort"
-        const val READ_SORT_KEY = "library.sort.read"
+        val TABS = listOf(null) + ReadingStatus.entries
+        fun key(tab: ReadingStatus?) = "library.sort.${tab?.name ?: "ALL"}"
     }
 }

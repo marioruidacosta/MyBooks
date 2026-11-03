@@ -100,8 +100,17 @@ fun LibraryScreen(
                             for (order in state.sorts) {
                                 DropdownMenuItem(
                                     text = { Text(order.label) },
-                                    leadingIcon = { if (order == state.sort) Icon(Icons.Filled.Check, "Selected") },
+                                    leadingIcon = { if (order == state.sort.order) Icon(Icons.Filled.Check, "Selected") },
                                     onClick = { sortMenuOpen = false; viewModel.setSort(order) },
+                                )
+                            }
+                            HorizontalDivider()
+                            for (descending in listOf(false, true)) {
+                                val order = state.sort.order
+                                DropdownMenuItem(
+                                    text = { Text(if (descending) order.descending else order.ascending) },
+                                    leadingIcon = { if (descending == state.sort.descending) Icon(Icons.Filled.Check, "Selected") },
+                                    onClick = { sortMenuOpen = false; viewModel.setDescending(descending) },
                                 )
                             }
                         }

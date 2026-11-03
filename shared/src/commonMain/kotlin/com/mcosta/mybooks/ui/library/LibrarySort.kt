@@ -3,12 +3,12 @@ package com.mcosta.mybooks.ui.library
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.searchKey
 
-/** How the library lists books; [SCORE] is offered on the Read tab only. */
-enum class LibrarySort(val label: String) {
-    TITLE("Title"),
-    AUTHOR("Author"),
-    PUBLISHER("Publisher"),
-    SCORE("Score"),
+/** How the library lists books; [SCORE] is offered on the Read tab only. [ascending]/[descending] name the directions. */
+enum class LibrarySort(val label: String, val ascending: String, val descending: String) {
+    TITLE("Title", "A to Z", "Z to A"),
+    AUTHOR("Author", "A to Z", "Z to A"),
+    PUBLISHER("Publisher", "A to Z", "Z to A"),
+    SCORE("Score", "Lowest first", "Highest first"),
 }
 
 /** Leading articles (Portuguese and English) that titles aren't sorted by: "O Castelo" is under C. */
@@ -24,20 +24,37 @@ internal fun authorKey(authors: String): String? {
     return searchKey("${first.substringAfterLast(' ')} $first")
 }
 
-/** The books in [sort] order; ties (and books without an author, publisher or score, listed last) go by title. */
-fun List<Book>.sortedFor(sort: LibrarySort): List<Book> {
+/** A tab's order and direction (A to Z / lowest first unless [descending]). */
+data class SortChoice(val order: LibrarySort = LibrarySort.TITLE, val descending: Boolean = false) {
+    /** How it's stored: "AUTHOR" or "AUTHOR:desc". */
+    fun encode(): String = if (descending) "${order.name}:desc" else order.name
+
+    companion object {
+        fun decode(text: String?): SortChoice? {
+            val order = LibrarySort.entries.firstOrNull { it.name == text?.substringBefore(':') } ?: return null
+            return SortChoice(order, descending = text?.endsWith(":desc") == true)
+        }
+    }
+}
+
+/**
+ * The books in [choice] order. Books without an author, publisher or score stay last in either direction;
+ * ties go A to Z by title.
+ */
+fun List<Book>.sortedFor(choice: SortChoice): List<Book> {
     // Keys computed once per book, not per comparison.
     val keyed = map { Keyed(it, titleKey(it.title)) }
     val byTitle = compareBy<Keyed> { it.title }.thenBy { it.book.id }
-    val order = when (sort) {
-        LibrarySort.TITLE -> byTitle
-        LibrarySort.AUTHOR -> keyed.associateWith { authorKey(it.book.authors) }.let { k ->
-            compareBy<Keyed> { k[it] == null }.thenBy { k[it] }.then(byTitle)
-        }
-        LibrarySort.PUBLISHER -> keyed.associateWith { it.book.publisher?.takeIf(String::isNotBlank)?.let(::searchKey) }.let { k ->
-            compareBy<Keyed> { k[it] == null }.thenBy { k[it] }.then(byTitle)
-        }
-        LibrarySort.SCORE -> compareBy<Keyed> { it.book.rating == null }.thenByDescending { it.book.rating }.then(byTitle)
+    fun <T : Comparable<T>> by(key: (Keyed) -> T?): Comparator<Keyed> {
+        val keys = keyed.associateWith(key)
+        val primary = compareBy<Keyed> { keys[it] }.let { if (choice.descending) it.reversed() else it }
+        return compareBy<Keyed> { keys[it] == null }.then(primary).then(byTitle)
+    }
+    val order = when (choice.order) {
+        LibrarySort.TITLE -> if (choice.descending) compareByDescending<Keyed> { it.title }.thenBy { it.book.id } else byTitle
+        LibrarySort.AUTHOR -> by { authorKey(it.book.authors) }
+        LibrarySort.PUBLISHER -> by { it.book.publisher?.takeIf(String::isNotBlank)?.let(::searchKey) }
+        LibrarySort.SCORE -> by { it.book.rating }
     }
     return keyed.sortedWith(order).map { it.book }
 }

@@ -47,7 +47,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
     }
 
     @Test
-    fun sortAppliesToAllTabsAndScoreOnlyToRead() = runTest {
+    fun eachTabKeepsItsOwnRememberedSort() = runTest {
         repo.save(Book(title = "Dune", authors = "Frank Herbert", publisher = "Ace", status = ReadingStatus.READ, rating = 3))
         repo.save(Book(title = "Emma", authors = "Jane Austen", publisher = "Penguin", status = ReadingStatus.WISHLIST))
         repo.save(Book(title = "Persuasion", authors = "Jane Austen", publisher = "Bantam", status = ReadingStatus.READ, rating = 5))
@@ -58,24 +58,33 @@ class LibraryViewModelTest : MainDispatcherTest() {
         assertEquals(listOf(LibrarySort.TITLE, LibrarySort.AUTHOR, LibrarySort.PUBLISHER), vm.state.value.sorts)
         vm.setSort(LibrarySort.AUTHOR)
         assertEquals(listOf("Emma", "Persuasion", "Dune"), vm.state.value.books.map { it.title })
+        vm.setDescending(true)
+        assertEquals(listOf("Dune", "Emma", "Persuasion"), vm.state.value.books.map { it.title })
         vm.setSort(LibrarySort.SCORE)                                  // not offered outside Read: ignored
-        assertEquals(LibrarySort.AUTHOR, vm.state.value.sort)
+        assertEquals(SortChoice(LibrarySort.AUTHOR, descending = true), vm.state.value.sort)
 
         vm.selectTab(ReadingStatus.READ)
-        assertEquals(LibrarySort.TITLE, vm.state.value.sort)           // Read keeps its own choice
+        assertEquals(SortChoice(), vm.state.value.sort)                // each tab has its own
         assertEquals(LibrarySort.entries, vm.state.value.sorts)
-        vm.setSort(LibrarySort.SCORE)
+        vm.setSort(LibrarySort.SCORE)                                  // score starts highest first
         assertEquals(listOf("Persuasion", "Dune"), vm.state.value.books.map { it.title })
+        vm.setDescending(false)
+        assertEquals(listOf("Dune", "Persuasion"), vm.state.value.books.map { it.title })
 
         vm.selectTab(ReadingStatus.WISHLIST)
-        assertEquals(LibrarySort.AUTHOR, vm.state.value.sort)
+        assertEquals(SortChoice(), vm.state.value.sort)
+        vm.setSort(LibrarySort.PUBLISHER)
 
         // Remembered after the app is closed.
         val again = LibraryViewModel(repo, prefs)
         backgroundScope.launch(mainDispatcher) { again.state.collect {} }
-        assertEquals(LibrarySort.AUTHOR, again.state.value.sort)
+        assertEquals(SortChoice(LibrarySort.AUTHOR, descending = true), again.state.value.sort)
         again.selectTab(ReadingStatus.READ)
-        assertEquals(LibrarySort.SCORE, again.state.value.sort)
+        assertEquals(SortChoice(LibrarySort.SCORE, descending = false), again.state.value.sort)
+        again.selectTab(ReadingStatus.WISHLIST)
+        assertEquals(SortChoice(LibrarySort.PUBLISHER), again.state.value.sort)
+        again.selectTab(ReadingStatus.TO_READ)
+        assertEquals(SortChoice(), again.state.value.sort)
     }
 
     @Test
