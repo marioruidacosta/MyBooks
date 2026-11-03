@@ -94,6 +94,10 @@ class BookDetailViewModel(
         viewModelScope.launch { repo.setDateStarted(id, date) }
     }
 
+    fun setDateRead(date: Long) {
+        viewModelScope.launch { repo.setDateRead(id, date) }
+    }
+
     fun editNotes(text: String) {
         _notesDraft.value = text
     }

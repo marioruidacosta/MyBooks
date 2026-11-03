@@ -116,4 +116,19 @@ class MigrationTest {
         assertEquals(row, db.shareStateDao().get(dune.id))
         db.close()
     }
+
+    /** Version 4 adds reading challenges: the library survives and the new table starts empty and works. */
+    @Test
+    fun upgradeAddsEmptyChallenges() = runTest {
+        val db = createAndroidDatabase(context, name)
+        assertEquals(2, db.bookDao().getAll().size)
+        assertTrue(db.challengeDao().getAll().isEmpty())
+        db.challengeDao().upsert(ChallengeEntity(2026, 30))
+        db.challengeDao().upsert(ChallengeEntity(2025, 25))
+        db.challengeDao().upsert(ChallengeEntity(2026, 35))
+        assertEquals(listOf(ChallengeEntity(2026, 35), ChallengeEntity(2025, 25)), db.challengeDao().getAll())
+        db.challengeDao().delete(2025)
+        assertEquals(listOf(ChallengeEntity(2026, 35)), db.challengeDao().getAll())
+        db.close()
+    }
 }

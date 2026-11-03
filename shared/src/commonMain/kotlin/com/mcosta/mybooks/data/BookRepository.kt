@@ -14,6 +14,7 @@ import com.mcosta.mybooks.data.lookup.BookLookupService
 import com.mcosta.mybooks.data.lookup.LookupResult
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.Isbn
+import com.mcosta.mybooks.domain.MAX_GOAL
 import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.share.ShareTracker
 import kotlinx.coroutines.coroutineScope
@@ -52,6 +53,8 @@ class BookRepository(
     private val coverStore: CoverStore? = null,
     /** Community sharing; null when the community isn't configured (and in most tests). */
     private val shareTracker: ShareTracker? = null,
+    /** Reading challenges, kept in backups; null in tests that don't involve them. */
+    private val challenges: ChallengeRepository? = null,
 ) {
     fun observeBooks(status: ReadingStatus?, query: String): Flow<List<Book>> =
         dao.observe(status, searchPattern(query)).map { list -> list.map { it.toBook() } }
@@ -129,6 +132,10 @@ class BookRepository(
 
     suspend fun setDateStarted(id: Long, date: Long) = modify(id) { it.copy(dateStarted = date) }
 
+    /** When the book was finished (it counts toward that year's challenge); a start date after it is dropped. */
+    suspend fun setDateRead(id: Long, date: Long) =
+        modify(id) { it.copy(dateRead = date, dateStarted = it.dateStarted?.takeIf { started -> started <= date }) }
+
     /** Sets the cover (e.g. a new photo) and removes the previous cover photo, if any. */
     suspend fun setCover(id: Long, coverUrl: String?) {
         val old = dao.getById(id)?.coverUrl
@@ -159,7 +166,8 @@ class BookRepository(
             val bytes = coverStore.read(ref) ?: return@mapNotNull null
             (BACKUP_COVERS + name) to bytes
         }
-        return Zip.write(listOf(BACKUP_LIBRARY to BackupSerializer.encode(books, clock(), shares()).encodeToByteArray()) + photos)
+        val library = BackupSerializer.encode(books, clock(), shares(), challenges?.all().orEmpty())
+        return Zip.write(listOf(BACKUP_LIBRARY to library.encodeToByteArray()) + photos)
     }
 
     /** Restores a .zip backup (with cover photos) or an older plain .json backup. */
@@ -176,17 +184,20 @@ class BookRepository(
         return importJson(library)
     }
 
-    suspend fun exportJson(): String = BackupSerializer.encode(dao.getAll().map { it.toBook() }, clock(), shares())
+    suspend fun exportJson(): String =
+        BackupSerializer.encode(dao.getAll().map { it.toBook() }, clock(), shares(), challenges?.all().orEmpty())
 
     private suspend fun shares() = shareTracker?.exportShares() ?: emptyMap()
 
     /**
      * Merges a backup into the library: books whose ISBN is already present are updated, the rest
      * inserted. Invalid entries (and repeats of an ISBN within the file) are counted as failed.
+     * Its reading challenges replace the same years' goals.
      * Throws [BackupFormatException] before writing anything if [json] is not a valid backup.
      */
     suspend fun importJson(json: String): ImportSummary {
         val books = BackupSerializer.decodeWithShares(json)
+        val goals = BackupSerializer.decodeChallenges(json).filter { it.goal in 1..MAX_GOAL }
         var added = 0
         var updated = 0
         var failed = 0
@@ -216,6 +227,7 @@ class BookRepository(
                 }
             }
         }
+        for (goal in goals) challenges?.setGoal(goal.year, goal.goal)
         return ImportSummary(added, updated, failed)
     }
 

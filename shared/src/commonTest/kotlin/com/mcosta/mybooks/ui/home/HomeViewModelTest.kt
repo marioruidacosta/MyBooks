@@ -1,0 +1,76 @@
+package com.mcosta.mybooks.ui.home
+
+import com.mcosta.mybooks.MainDispatcherTest
+import com.mcosta.mybooks.data.BookRepository
+import com.mcosta.mybooks.data.ChallengeRepository
+import com.mcosta.mybooks.data.FakeBookDao
+import com.mcosta.mybooks.data.FakeChallengeDao
+import com.mcosta.mybooks.data.backup.BackupSerializer
+import com.mcosta.mybooks.data.lookup.BookLookupService
+import com.mcosta.mybooks.data.lookup.LookupResult
+import com.mcosta.mybooks.domain.Book
+import com.mcosta.mybooks.domain.ChallengeProgress
+import com.mcosta.mybooks.domain.Pace
+import com.mcosta.mybooks.domain.ReadingStatus
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+
+class HomeViewModelTest : MainDispatcherTest() {
+    private val utc = TimeZone.UTC
+    private fun day(text: String) = LocalDate.parse(text).atStartOfDayIn(utc).toEpochMilliseconds()
+    private val challenges = ChallengeRepository(FakeChallengeDao())
+    private val repo = BookRepository(FakeBookDao(), object : BookLookupService {
+        override suspend fun lookup(isbn: String): LookupResult = LookupResult.NotFound
+    })
+
+    private fun vm() = HomeViewModel(repo, challenges, today = { LocalDate.parse("2026-11-03") }, timeZone = utc)
+
+    @Test
+    fun readingMostRecentlyStartedFirst() = runTest {
+        repo.save(Book(title = "Old", status = ReadingStatus.READING, dateStarted = day("2026-01-01")))
+        repo.save(Book(title = "Undated", status = ReadingStatus.READING))
+        repo.save(Book(title = "New", status = ReadingStatus.READING, dateStarted = day("2026-10-30")))
+        repo.save(Book(title = "Done", status = ReadingStatus.READ, dateRead = day("2026-10-01")))
+        val vm = vm()
+        backgroundScope.launch(mainDispatcher) { vm.state.collect {} }
+        // "Undated" got today's (real) start date when saved as Reading, so it's the newest.
+        assertEquals(listOf("Undated", "New", "Old"), vm.state.value.reading.map { it.title })
+    }
+
+    @Test
+    fun shelvesCountBooksAndFanTheNewestCovers() = runTest {
+        for (i in 1..7) repo.save(Book(title = "T$i", status = ReadingStatus.TO_READ, coverUrl = "c$i".takeIf { i != 6 }))
+        repo.save(Book(title = "Buy", status = ReadingStatus.WISHLIST))
+        repo.save(Book(title = "R", status = ReadingStatus.READ, coverUrl = "r", dateRead = day("2026-02-02")))
+        val vm = vm()
+        backgroundScope.launch(mainDispatcher) { vm.state.collect {} }
+        val shelves = vm.state.value.shelves
+        assertEquals(listOf(ReadingStatus.TO_READ, ReadingStatus.WISHLIST, ReadingStatus.READ, null), shelves.map { it.status })
+        assertEquals(listOf(7, 1, 1, 9), shelves.map { it.count })
+        // Same dateAdded in this test (clock), so the newest are the last inserted; T6 has no cover.
+        assertEquals(SHELF_COVERS, shelves[0].covers.size)
+        assertEquals(false, "c6" in shelves[0].covers)
+        assertEquals(emptyList(), shelves[1].covers)
+    }
+
+    @Test
+    fun thisYearsChallenge() = runTest {
+        repo.save(Book(title = "A", status = ReadingStatus.READ, dateRead = day("2026-03-01")))
+        repo.save(Book(title = "B", status = ReadingStatus.READ, dateRead = day("2025-12-31")))
+        // Restored without a read date (adding it as Read in the app would date it today): counts toward no year.
+        repo.importJson(BackupSerializer.encode(listOf(Book(title = "C", status = ReadingStatus.READ)), 0))
+        val vm = vm()
+        backgroundScope.launch(mainDispatcher) { vm.state.collect {} }
+        assertNull(vm.state.value.challenge)
+        assertEquals(2026, vm.state.value.year)
+        challenges.setGoal(2026, 30)
+        assertEquals(ChallengeProgress(2026, 30, 1), vm.state.value.challenge)
+        assertEquals(Pace.Behind(24), vm.state.value.pace)
+    }
+}

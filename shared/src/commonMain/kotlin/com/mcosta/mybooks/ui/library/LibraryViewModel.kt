@@ -30,8 +30,10 @@ class LibraryViewModel(
     private val repo: BookRepository,
     /** Remembers the sort orders between launches; null keeps them for this session only. */
     private val prefs: Preferences? = null,
+    /** The shelf shown ([ReadingStatus] null is All books). */
+    section: ReadingStatus? = null,
 ) : ViewModel() {
-    private val tab = MutableStateFlow<ReadingStatus?>(null)
+    private val tab = MutableStateFlow(section)
     private val query = MutableStateFlow("")
     /** Each tab's own sort (All is the null tab), as saved. */
     private val sorts = MutableStateFlow(TABS.associateWith { SortChoice.decode(prefs?.get(key(it))) ?: SortChoice() })
