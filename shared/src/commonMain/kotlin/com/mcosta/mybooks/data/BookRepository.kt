@@ -10,7 +10,6 @@ import com.mcosta.mybooks.data.db.toBook
 import com.mcosta.mybooks.data.db.toEntity
 import com.mcosta.mybooks.data.goodreads.GoodreadsCsv
 import com.mcosta.mybooks.data.goodreads.GoodreadsFormatException
-import com.mcosta.mybooks.data.releases.openLibraryCover
 import com.mcosta.mybooks.data.lookup.BookLookupService
 import com.mcosta.mybooks.data.lookup.LookupResult
 import com.mcosta.mybooks.domain.Book
@@ -83,7 +82,7 @@ class BookRepository(
         } else {
             val stored = dao.getById(validated.id)
             val merged = validated.copy(dateAdded = stored?.dateAdded ?: validated.dateAdded)
-            val updated = withStatusDates(merged)
+            val updated = withStatusDates(merged, stored?.status)
             dao.update(updated.toEntity())
             shareTracker?.changed(stored?.toBook(), updated)
             if (stored != null && stored.coverUrl != merged.coverUrl) coverStore?.delete(stored.coverUrl)
@@ -92,7 +91,7 @@ class BookRepository(
     }
 
     suspend fun setStatus(id: Long, status: ReadingStatus) =
-        modify(id) { withStatusDates(it.copy(status = status)) }
+        modify(id) { withStatusDates(it.copy(status = status), it.status) }
 
     suspend fun setRating(id: Long, rating: Int?) {
         require(rating == null || rating in 1..5) { "rating must be 1..5 or null" }
@@ -200,12 +199,12 @@ class BookRepository(
                     dao.findWithoutIsbn(book.title, book.authors.trim())
                 }
                 if (existing != null) {
-                    dao.update(withStatusDates(book.copy(id = existing.id, dateAdded = existing.dateAdded)).toEntity())
+                    dao.update(withStatusDates(book.copy(id = existing.id, dateAdded = existing.dateAdded), book.status).toEntity())
                     if (share != null) shareTracker?.restored(existing.id, share)
                     updated++
                 } else {
                     val dateAdded = if (book.dateAdded > 0) book.dateAdded else clock()
-                    val id = dao.insert(withStatusDates(book.copy(dateAdded = dateAdded)).toEntity())
+                    val id = dao.insert(withStatusDates(book.copy(dateAdded = dateAdded), book.status).toEntity())
                     if (share != null) shareTracker?.restored(id, share)
                     added++
                 }
@@ -220,8 +219,9 @@ class BookRepository(
     /**
      * Merges a Goodreads library export. A book already here (same ISBN, or same title and authors when it has
      * none) takes Goodreads' shelf, date read, and its rating and review when Goodreads has them; other details
-     * are only filled in where empty, so covers, notes and progress stay. New books get Open Library's cover by
-     * ISBN. Like a backup restore, nothing is posted to the community. Throws [GoodreadsFormatException] before
+     * are only filled in where empty, so covers, notes and progress stay. Goodreads has no start dates and many
+     * books have no read date: none are invented. Covers come afterwards ([findMissingCovers]). Like a backup
+     * restore, nothing is posted to the community. Throws [GoodreadsFormatException] before
      * writing anything if [csv] is not a Goodreads export.
      */
     suspend fun importGoodreads(csv: String): ImportSummary {
@@ -237,15 +237,13 @@ class BookRepository(
                     failed++
                     continue
                 }
-                // Read without a date (common on Goodreads): the day it was shelved, not today.
-                val dateRead = book.dateRead ?: book.dateAdded.takeIf { book.status == ReadingStatus.READ && it > 0 }
                 val existing = (if (book.isbn != null) dao.findByIsbn(book.isbn) else null)
                     ?: dao.findWithoutIsbn(book.title, book.authors.trim())
                 if (existing != null) {
                     val mine = existing.toBook()
                     val merged = mine.copy(
                         status = book.status,
-                        dateRead = book.dateRead ?: mine.dateRead ?: dateRead,
+                        dateRead = book.dateRead ?: mine.dateRead,
                         rating = book.rating ?: mine.rating,
                         review = book.review.ifEmpty { mine.review },
                         isbn = mine.isbn ?: book.isbn,
@@ -255,17 +253,40 @@ class BookRepository(
                         publishedYear = mine.publishedYear ?: book.publishedYear,
                         notes = mine.notes.ifEmpty { book.notes },
                     )
-                    dao.update(withStatusDates(merged).toEntity())
+                    dao.update(withStatusDates(merged, book.status).toEntity())
                     updated++
                 } else {
-                    val cover = book.isbn?.let { openLibraryCover(it) }
                     val dateAdded = if (book.dateAdded > 0) book.dateAdded else clock()
-                    dao.insert(withStatusDates(book.copy(coverUrl = cover, dateAdded = dateAdded, dateRead = dateRead)).toEntity())
+                    dao.insert(withStatusDates(book.copy(dateAdded = dateAdded), book.status).toEntity())
                     added++
                 }
             }
         }
         return ImportSummary(added, updated, failed)
+    }
+
+    /**
+     * Looks up a cover for every book with an ISBN and no cover, one at a time, with the same sources as adding a
+     * book; an empty description and page count are filled in too. Like an import, this isn't posted to the
+     * community. [onProgress] gets (books done, books to look up, covers found). Returns the covers found.
+     */
+    suspend fun findMissingCovers(onProgress: (done: Int, total: Int, found: Int) -> Unit = { _, _, _ -> }): Int {
+        val todo = dao.getAll().map { it.toBook() }.filter { it.isbn != null && it.coverUrl == null }.map { it.id }
+        var found = 0
+        onProgress(0, todo.size, 0)
+        todo.forEachIndexed { i, id ->
+            val isbn = dao.getById(id)?.toBook()?.takeIf { it.coverUrl == null }?.isbn
+            val match = isbn?.let { (lookupService.lookup(it) as? LookupResult.Found)?.book }
+            // Read again: the book may have been edited or deleted during the lookup.
+            val book = dao.getById(id)?.toBook()
+            if (match?.coverUrl != null && book != null && book.coverUrl == null) {
+                val description = book.description ?: match.description
+                dao.update(book.copy(coverUrl = match.coverUrl, description = description, pageCount = book.pageCount ?: match.pageCount).toEntity())
+                found++
+            }
+            onProgress(i + 1, todo.size, found)
+        }
+        return found
     }
 
     private suspend fun modify(id: Long, change: (Book) -> Book) {
@@ -276,12 +297,18 @@ class BookRepository(
     }
 
     /**
-     * Status rules: Reading records a start date; Read records a read date and keeps the start date and
-     * progress as history; To read / To buy mean "not started", so start date and progress are cleared.
+     * Status rules: moving to Reading records a start date; moving to Read records a read date and keeps the
+     * start date and progress as history; To read / To buy mean "not started", so start date and progress are
+     * cleared. Only a change from [previous] records today's date: a book that already had its status (restored,
+     * imported, edited) keeps the dates it has, even none. A start date after the read date is dropped.
      */
-    private fun withStatusDates(book: Book): Book = when (book.status) {
-        ReadingStatus.READING -> book.copy(dateRead = null, dateStarted = book.dateStarted ?: clock())
-        ReadingStatus.READ -> book.copy(dateRead = book.dateRead ?: clock())
+    private fun withStatusDates(book: Book, previous: ReadingStatus? = null): Book = when (book.status) {
+        ReadingStatus.READING ->
+            book.copy(dateRead = null, dateStarted = book.dateStarted ?: clock().takeIf { previous != ReadingStatus.READING })
+        ReadingStatus.READ -> {
+            val read = book.dateRead ?: clock().takeIf { previous != ReadingStatus.READ }
+            book.copy(dateRead = read, dateStarted = book.dateStarted?.takeIf { read == null || it <= read })
+        }
         ReadingStatus.TO_READ, ReadingStatus.WISHLIST ->
             book.copy(dateRead = null, dateStarted = null, currentPage = null, progressPercent = null)
     }

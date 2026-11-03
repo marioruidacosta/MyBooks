@@ -9,6 +9,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
+import kotlin.math.roundToInt
 import kotlin.time.Instant
 
 class GoodreadsFormatException(message: String) : Exception(message)
@@ -39,7 +40,8 @@ object GoodreadsCsv {
                 title = row("Title"),
                 authors = (listOf(row("Author")) + row("Additional Authors").split(',')).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(", "),
                 isbn = Isbn.normalize(unquoteIsbn(row("ISBN13"))) ?: Isbn.normalize(unquoteIsbn(row("ISBN"))),
-                rating = row("My Rating").toIntOrNull()?.takeIf { it in 1..5 },
+                // Goodreads writes "5.0" and, for half and quarter stars, "4.5" or "4.25": rounded to whole stars.
+                rating = row("My Rating").toDoubleOrNull()?.roundToInt()?.takeIf { it in 1..5 },
                 publisher = row("Publisher").ifEmpty { null },
                 pageCount = row("Number of Pages").toIntOrNull()?.takeIf { it > 0 },
                 publishedYear = (row("Year Published").ifEmpty { row("Original Publication Year") }).toIntOrNull(),

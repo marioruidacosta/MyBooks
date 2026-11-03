@@ -3,6 +3,7 @@ package com.mcosta.mybooks
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
 import com.mcosta.mybooks.data.BookRepository
+import com.mcosta.mybooks.data.CoverFinder
 import com.mcosta.mybooks.data.covers.CoverStore
 import com.mcosta.mybooks.data.db.AppDatabase
 import com.mcosta.mybooks.data.db.ShareStateDao
@@ -73,6 +74,9 @@ class AppContainer(
         coverStore = coverStore,
         shareTracker = sharing?.tracker,
     )
+
+    /** Looks up missing covers (e.g. after a Goodreads import) in the background. */
+    val coverFinder = CoverFinder(repository, applicationScope)
 }
 
 /** The social services when [config] is complete, else null (nothing is created or contacted). */

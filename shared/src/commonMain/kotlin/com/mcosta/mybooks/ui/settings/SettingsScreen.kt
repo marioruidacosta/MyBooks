@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -41,6 +43,7 @@ fun SettingsScreen(
     onOpenAccount: (() -> Unit)? = null,
 ) {
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val coverProgress by viewModel.coverProgress.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -91,7 +94,8 @@ fun SettingsScreen(
                 "Goodreads can't sync automatically, but it can swap files. To bring your Goodreads books here, " +
                     "export your library on goodreads.com (My Books, Import and export, Export Library) and import " +
                     "that file. Matching books take Goodreads' shelf, rating, dates and review; your covers, notes " +
-                    "and progress stay. To update Goodreads, export for Goodreads and upload the file on the same page.",
+                    "and progress stay. Covers are then looked up. To update Goodreads, export for Goodreads and " +
+                    "upload the file on the same page.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             OutlinedButton(onClick = viewModel::importGoodreads, modifier = Modifier.fillMaxWidth()) {
@@ -101,6 +105,26 @@ fun SettingsScreen(
             OutlinedButton(onClick = viewModel::exportGoodreads, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Filled.Upload, null)
                 Text("  Export for Goodreads")
+            }
+            HorizontalDivider()
+            Text("Covers", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Look up a cover for every book with an ISBN but no cover, in the same places as when you add a book. " +
+                    "Many Portuguese editions have none online; you can take a photo from the book's page.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            val running = coverProgress?.finished == false
+            coverProgress?.let { p ->
+                if (p.finished) {
+                    Text("Last search: covers found for ${p.found} of ${p.total} books.", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    Text("Finding covers: ${p.done} of ${p.total} books (${p.found} found)…", style = MaterialTheme.typography.bodyMedium)
+                    LinearProgressIndicator(progress = { if (p.total == 0) 0f else p.done.toFloat() / p.total }, Modifier.fillMaxWidth())
+                }
+            }
+            OutlinedButton(onClick = viewModel::findCovers, enabled = !running, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.Search, null)
+                Text("  Find missing covers")
             }
         }
     }

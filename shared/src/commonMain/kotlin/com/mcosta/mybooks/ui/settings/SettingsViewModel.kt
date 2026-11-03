@@ -3,6 +3,7 @@ package com.mcosta.mybooks.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mcosta.mybooks.data.BookRepository
+import com.mcosta.mybooks.data.CoverFinder
 import com.mcosta.mybooks.platform.DocumentPicker
 import com.mcosta.mybooks.ui.today as currentDate
 import kotlinx.coroutines.CancellationException
@@ -15,7 +16,12 @@ class SettingsViewModel(
     private val repo: BookRepository,
     private val documents: DocumentPicker,
     private val today: () -> String = { currentDate().toString() },
+    /** Looks up missing covers in the background; null in tests that don't involve it. */
+    private val covers: CoverFinder? = null,
 ) : ViewModel() {
+    /** The current or last cover search. */
+    val coverProgress: StateFlow<CoverFinder.Progress?> = covers?.progress ?: MutableStateFlow(null)
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
@@ -43,7 +49,15 @@ class SettingsViewModel(
         // Android file managers often label .csv files as Excel.
         val bytes = documents.open(listOf("text/csv", "text/comma-separated-values", "application/vnd.ms-excel", "text/plain")) ?: return@run null
         val s = repo.importGoodreads(bytes.decodeToString())
-        "Imported from Goodreads: ${s.added} added, ${s.updated} updated, ${s.failed} skipped"
+        val summary = "Imported from Goodreads: ${s.added} added, ${s.updated} updated, ${s.failed} skipped"
+        if (covers == null) return@run summary
+        covers.start()
+        "$summary.\n\nLooking for covers now. It takes a few minutes and carries on if you leave this screen."
+    }
+
+    /** Looks up covers for books with an ISBN and no cover. */
+    fun findCovers() {
+        covers?.start()
     }
 
     fun dismissMessage() {

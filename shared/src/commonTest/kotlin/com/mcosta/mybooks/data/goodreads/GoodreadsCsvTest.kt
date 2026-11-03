@@ -55,6 +55,26 @@ class GoodreadsCsvTest {
         assertEquals(ReadingStatus.TO_READ, books[3].status)      // a custom exclusive shelf
     }
 
+    /** The 2026 export: no Average Rating column, ratings as decimals (half and quarter stars too). */
+    @Test
+    fun decimalRatingsRoundToWholeStars() {
+        val header = listOf(
+            "Book Id", "Title", "Author", "Author l-f", "Additional Authors", "ISBN", "ISBN13", "My Rating", "Publisher",
+            "Binding", "Number of Pages", "Year Published", "Original Publication Year", "Date Read", "Date Added",
+            "Bookshelves", "Bookshelves with positions", "Exclusive Shelf", "My Review", "Spoiler", "Private Notes",
+            "Read Count", "Owned Copies",
+        )
+        fun row(title: String, rating: String) = listOf(
+            "1", title, "A", "", "", "=\"\"", "=\"\"", rating, "Relógio D'Água Editores", "Paperback", "122", "2008", "1860",
+            "", "2026/10/27", "", "", "read", "", "", "", "1", "0",
+        )
+        val csv = Csv.write(listOf(header, row("a", "5.0"), row("b", "4.25"), row("c", "4.5"), row("d", "3.0"), row("e", "0")))
+        val read = GoodreadsCsv.read(csv, utc)
+        assertEquals(listOf(5, 4, 5, 3, null), read.map { it.rating })
+        assertEquals("Relógio D'Água Editores", read[0].publisher)
+        assertNull(read[0].dateRead)
+    }
+
     @Test
     fun multiLineReviewKeepsItsLines() {
         assertEquals("Line one\nline two", books[3].review)
