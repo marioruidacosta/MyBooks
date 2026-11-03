@@ -88,7 +88,7 @@ fun MyBooksNavHost(container: AppContainer) {
 
     NavHost(nav, startDestination = Routes.LIBRARY) {
         composable(Routes.LIBRARY) {
-            val vm = viewModel { LibraryViewModel(container.repository) }
+            val vm = viewModel { LibraryViewModel(container.repository, container.preferences) }
             LibraryScreen(
                 viewModel = vm,
                 snackbarHostState = snackbar,

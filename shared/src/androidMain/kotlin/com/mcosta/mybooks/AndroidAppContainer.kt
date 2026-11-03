@@ -28,4 +28,5 @@ fun androidAppContainer(context: Context, googleBooksApiKey: String, appVersion:
     socialConfig = socialConfig,
     // Session in the app's own preferences (the library default needs an androidx-startup hook).
     socialSettings = SharedPreferencesSettings(context.getSharedPreferences("mybooks_community", Context.MODE_PRIVATE)),
+    appSettings = SharedPreferencesSettings(context.getSharedPreferences("mybooks", Context.MODE_PRIVATE)),
 )

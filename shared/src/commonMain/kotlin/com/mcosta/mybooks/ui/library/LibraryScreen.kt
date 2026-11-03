@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Group
@@ -85,12 +87,25 @@ fun LibraryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf(state.query) }
     var menuOpen by remember { mutableStateOf(false) }
+    var sortMenuOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("MyBooks") },
                 actions = {
+                    Box {
+                        IconButton(onClick = { sortMenuOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
+                        DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                            for (order in state.sorts) {
+                                DropdownMenuItem(
+                                    text = { Text(order.label) },
+                                    leadingIcon = { if (order == state.sort) Icon(Icons.Filled.Check, "Selected") },
+                                    onClick = { sortMenuOpen = false; viewModel.setSort(order) },
+                                )
+                            }
+                        }
+                    }
                     if (onOpenReleases != null) {
                         IconButton(onClick = onOpenReleases) { Icon(Icons.Filled.NewReleases, "New in Portugal") }
                     }

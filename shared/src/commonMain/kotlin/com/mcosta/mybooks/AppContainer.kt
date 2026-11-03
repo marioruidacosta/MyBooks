@@ -4,6 +4,8 @@ import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
 import com.mcosta.mybooks.data.BookRepository
 import com.mcosta.mybooks.data.CoverFinder
+import com.mcosta.mybooks.data.Preferences
+import com.mcosta.mybooks.data.SettingsPreferences
 import com.mcosta.mybooks.data.covers.CoverStore
 import com.mcosta.mybooks.data.db.AppDatabase
 import com.mcosta.mybooks.data.db.ShareStateDao
@@ -39,6 +41,8 @@ class AppContainer(
     userAgent: String,
     socialConfig: SocialConfig = SocialConfig("", ""),
     socialSettings: Settings? = null,
+    /** Where small preferences (the library's sort order) are kept; null keeps them for the session only. */
+    appSettings: Settings? = null,
     /** Where New in Portugal's downloaded lists are saved. */
     releasesFileSystem: FileSystem,
     releasesDir: Path,
@@ -74,6 +78,8 @@ class AppContainer(
         coverStore = coverStore,
         shareTracker = sharing?.tracker,
     )
+
+    val preferences: Preferences? = appSettings?.let(::SettingsPreferences)
 
     /** Looks up missing covers (e.g. after a Goodreads import) in the background. */
     val coverFinder = CoverFinder(repository, applicationScope)

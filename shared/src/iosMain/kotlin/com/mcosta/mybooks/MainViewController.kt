@@ -1,5 +1,7 @@
 package com.mcosta.mybooks
 
+import com.russhwolf.settings.NSUserDefaultsSettings
+import platform.Foundation.NSUserDefaults
 import androidx.compose.ui.window.ComposeUIViewController
 import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
@@ -43,6 +45,7 @@ private val container: AppContainer by lazy {
         googleBooksApiKey = infoString("GoogleBooksApiKey").trim(),
         userAgent = "MyBooks/${infoString("CFBundleShortVersionString")} (iOS; personal library app)",
         socialConfig = SocialConfig(infoString("SupabaseUrl").trim(), infoString("SupabaseAnonKey").trim()),
+        appSettings = NSUserDefaultsSettings(NSUserDefaults.standardUserDefaults),
     )
 }
 
