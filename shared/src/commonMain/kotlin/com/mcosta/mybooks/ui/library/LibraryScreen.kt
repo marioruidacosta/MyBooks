@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
@@ -43,6 +44,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -88,6 +90,18 @@ fun LibraryScreen(
     var query by rememberSaveable { mutableStateOf(state.query) }
     var menuOpen by remember { mutableStateOf(false) }
     var sortMenuOpen by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    // A new order or tab starts at the top. Otherwise the list keeps the book that was on top in view, and a
+    // reversed order moves it to the end, so the list seemed not to change. Saved so coming back from a book
+    // keeps the place.
+    val shown = "${state.tab}/${state.sort.encode()}"
+    var lastShown by rememberSaveable { mutableStateOf(shown) }
+    LaunchedEffect(shown) {
+        if (shown != lastShown) {
+            lastShown = shown
+            listState.scrollToItem(0)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -170,7 +184,7 @@ fun LibraryScreen(
                     Text("No books here yet", style = MaterialTheme.typography.bodyLarge)
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.fillMaxSize(), state = listState) {
                     items(state.books, key = { it.id }) { book ->
                         BookRow(book, onClick = { onOpenBook(book.id) })
                         HorizontalDivider()
@@ -196,6 +210,15 @@ private fun BookRow(book: Book, onClick: () -> Unit) {
                 Text(
                     book.authors,
                     style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            book.publisher?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
