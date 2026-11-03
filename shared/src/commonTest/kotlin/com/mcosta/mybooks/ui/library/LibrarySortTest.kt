@@ -58,4 +58,16 @@ class LibrarySortTest {
         assertEquals(null, SortChoice.decode("SOMETHING"))
         assertEquals(null, SortChoice.decode(null))
     }
+
+    @Test
+    fun dateAddedNewestOrOldestFirst() {
+        val books = listOf(
+            Book(id = 1, title = "Middle", dateAdded = 200),
+            Book(id = 2, title = "Newest", dateAdded = 300),
+            Book(id = 3, title = "Oldest b", dateAdded = 100),
+            Book(id = 4, title = "Oldest a", dateAdded = 100),
+        )
+        assertEquals(listOf("Newest", "Middle", "Oldest a", "Oldest b"), books.sortedFor(SortChoice(LibrarySort.DATE_ADDED, descending = true)).titles())
+        assertEquals(listOf("Oldest a", "Oldest b", "Middle", "Newest"), books.sortedFor(SortChoice(LibrarySort.DATE_ADDED)).titles())
+    }
 }

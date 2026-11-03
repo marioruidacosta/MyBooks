@@ -45,6 +45,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.rememberCoroutineScope
 import com.mcosta.mybooks.ui.formatDate
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
 import com.mcosta.mybooks.ui.components.rememberCoverPhotoTaker
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -72,6 +73,7 @@ fun BookDetailScreen(
     val shareExcluded by viewModel.shareExcluded.collectAsStateWithLifecycle()
     val deleted by viewModel.deleted.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
+    var pickingReadDate by remember { mutableStateOf(false) }
 
     LaunchedEffect(deleted) { if (deleted) onBack() }
     val snackbar = remember { SnackbarHostState() }
@@ -116,10 +118,24 @@ fun BookDetailScreen(
         ) {
             Header(b, onAddPhoto = takePhoto)
             StatusSelector(b.status, viewModel::setStatus, Modifier.fillMaxWidth())
-            if (b.status == ReadingStatus.READ && b.dateRead != null) {
-                val text = b.dateStarted?.let { "Read from ${formatDate(it)} to ${formatDate(b.dateRead)}" }
-                    ?: "Read on ${formatDate(b.dateRead)}"
-                Text(text, style = MaterialTheme.typography.bodyMedium)
+            if (b.status == ReadingStatus.READ) {
+                val read = b.dateRead
+                val text = when {
+                    read == null -> "Read date not set: it counts toward no year's challenge"
+                    b.dateStarted != null -> "Read from ${formatDate(b.dateStarted)} to ${formatDate(read)}"
+                    else -> "Read on ${formatDate(read)}"
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { pickingReadDate = true }) { Text(if (read == null) "Set" else "Change") }
+                }
+                if (pickingReadDate) {
+                    DayPicker(
+                        initial = read ?: Clock.System.now().toEpochMilliseconds(),
+                        onPicked = { viewModel.setDateRead(it); pickingReadDate = false },
+                        onDismiss = { pickingReadDate = false },
+                    )
+                }
             }
             if (b.status == ReadingStatus.READING) {
                 ReadingSection(b, viewModel)

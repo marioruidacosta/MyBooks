@@ -16,31 +16,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.DynamicFeed
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.NewReleases
-import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -52,6 +41,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,8 +50,6 @@ import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.ReadingStatus
 import com.mcosta.mybooks.ui.components.BookCover
 import com.mcosta.mybooks.ui.components.RatingStars
-
-private val tabs = listOf(null) + ReadingStatus.entries
 
 fun ReadingStatus?.label() = when (this) {
     null -> "All"
@@ -70,26 +59,28 @@ fun ReadingStatus?.label() = when (this) {
     ReadingStatus.WISHLIST -> "To buy"
 }
 
+/** One shelf's books (the view model's section), with search and that shelf's own sort. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel,
-    snackbarHostState: SnackbarHostState,
+    title: String,
+    onBack: () -> Unit,
     onOpenBook: (Long) -> Unit,
-    onAddManually: () -> Unit,
-    onScan: () -> Unit,
-    onOpenSettings: () -> Unit,
-    /** New in Portugal (always available). */
-    onOpenReleases: (() -> Unit)? = null,
-    /** Null when the community features aren't configured: no Friends icon. */
-    onOpenFriends: (() -> Unit)? = null,
-    /** Null when the community features aren't configured: no Activity icon. */
-    onOpenActivity: (() -> Unit)? = null,
+    /** Opened from the home screen's search: the search box takes the keyboard. */
+    focusSearch: Boolean = false,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf(state.query) }
-    var menuOpen by remember { mutableStateOf(false) }
     var sortMenuOpen by remember { mutableStateOf(false) }
+    val searchFocus = remember { FocusRequester() }
+    var searchFocused by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (focusSearch && !searchFocused) {
+            searchFocused = true
+            searchFocus.requestFocus()
+        }
+    }
     val listState = rememberLazyListState()
     // A new order or tab starts at the top. Otherwise the list keeps the book that was on top in view, and a
     // reversed order moves it to the end, so the list seemed not to change. Saved so coming back from a book
@@ -106,7 +97,8 @@ fun LibraryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("MyBooks") },
+                title = { Text(title) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 actions = {
                     Box {
                         IconButton(onClick = { sortMenuOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
@@ -129,59 +121,22 @@ fun LibraryScreen(
                             }
                         }
                     }
-                    if (onOpenReleases != null) {
-                        IconButton(onClick = onOpenReleases) { Icon(Icons.Filled.NewReleases, "New in Portugal") }
-                    }
-                    if (onOpenActivity != null) {
-                        IconButton(onClick = onOpenActivity) { Icon(Icons.Filled.DynamicFeed, "Activity") }
-                    }
-                    if (onOpenFriends != null) {
-                        IconButton(onClick = onOpenFriends) { Icon(Icons.Filled.Group, "Friends") }
-                    }
-                    IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, "Settings") }
                 },
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            Box {
-                FloatingActionButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.Add, "Add book") }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Scan barcode") },
-                        leadingIcon = { Icon(Icons.Filled.QrCodeScanner, null) },
-                        onClick = { menuOpen = false; onScan() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Enter manually") },
-                        leadingIcon = { Icon(Icons.Filled.Edit, null) },
-                        onClick = { menuOpen = false; onAddManually() },
-                    )
-                }
-            }
-        },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            PrimaryScrollableTabRow(selectedTabIndex = tabs.indexOf(state.tab), edgePadding = 8.dp) {
-                tabs.forEach { status ->
-                    Tab(
-                        selected = state.tab == status,
-                        onClick = { viewModel.selectTab(status) },
-                        text = { Text(status.label()) },
-                    )
-                }
-            }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it; viewModel.setQuery(it) },
                 placeholder = { Text("Search title or author") },
                 leadingIcon = { Icon(Icons.Filled.Search, null) },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(searchFocus),
             )
             if (state.books.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No books here yet", style = MaterialTheme.typography.bodyLarge)
+                    Text(if (query.isBlank()) "No books here yet" else "No books match", style = MaterialTheme.typography.bodyLarge)
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize(), state = listState) {

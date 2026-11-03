@@ -3,12 +3,16 @@ package com.mcosta.mybooks.ui.library
 import com.mcosta.mybooks.domain.Book
 import com.mcosta.mybooks.domain.searchKey
 
-/** How the library lists books; [SCORE] is offered on the Read tab only. [ascending]/[descending] name the directions. */
-enum class LibrarySort(val label: String, val ascending: String, val descending: String) {
+/**
+ * How the library lists books; [SCORE] is offered on the Read tab only. [ascending]/[descending] name the
+ * directions; choosing an order starts descending when [newestOrHighestFirst].
+ */
+enum class LibrarySort(val label: String, val ascending: String, val descending: String, val newestOrHighestFirst: Boolean = false) {
     TITLE("Title", "A to Z", "Z to A"),
     AUTHOR("Author", "A to Z", "Z to A"),
     PUBLISHER("Publisher", "A to Z", "Z to A"),
-    SCORE("Score", "Lowest first", "Highest first"),
+    DATE_ADDED("Date added", "Oldest first", "Newest first", newestOrHighestFirst = true),
+    SCORE("Score", "Lowest first", "Highest first", newestOrHighestFirst = true),
 }
 
 /** Leading articles (Portuguese and English) that titles aren't sorted by: "O Castelo" is under C. */
@@ -54,6 +58,7 @@ fun List<Book>.sortedFor(choice: SortChoice): List<Book> {
         LibrarySort.TITLE -> if (choice.descending) compareByDescending<Keyed> { it.title }.thenBy { it.book.id } else byTitle
         LibrarySort.AUTHOR -> by { authorKey(it.book.authors) }
         LibrarySort.PUBLISHER -> by { it.book.publisher?.takeIf(String::isNotBlank)?.let(::searchKey) }
+        LibrarySort.DATE_ADDED -> by { it.book.dateAdded }
         LibrarySort.SCORE -> by { it.book.rating }
     }
     return keyed.sortedWith(order).map { it.book }

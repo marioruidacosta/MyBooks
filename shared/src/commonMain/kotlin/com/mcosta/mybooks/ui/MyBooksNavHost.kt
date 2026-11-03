@@ -39,6 +39,14 @@ import com.mcosta.mybooks.ui.detail.BookDetailScreen
 import com.mcosta.mybooks.ui.detail.BookDetailViewModel
 import com.mcosta.mybooks.ui.edit.EditBookScreen
 import com.mcosta.mybooks.ui.edit.EditBookViewModel
+import com.mcosta.mybooks.domain.ReadingStatus
+import com.mcosta.mybooks.ui.activity.ReadYearScreen
+import com.mcosta.mybooks.ui.activity.ReadYearViewModel
+import com.mcosta.mybooks.ui.activity.ReadingActivityScreen
+import com.mcosta.mybooks.ui.activity.ReadingActivityViewModel
+import com.mcosta.mybooks.ui.home.HomeScreen
+import com.mcosta.mybooks.ui.home.HomeViewModel
+import com.mcosta.mybooks.ui.home.shelfLabel
 import com.mcosta.mybooks.ui.library.LibraryScreen
 import com.mcosta.mybooks.ui.library.LibraryViewModel
 import com.mcosta.mybooks.ui.settings.SettingsScreen
@@ -46,7 +54,13 @@ import com.mcosta.mybooks.ui.settings.SettingsViewModel
 import kotlinx.coroutines.launch
 
 object Routes {
+    /** The home screen: Reading, your reading activity and the shelves. */
     const val LIBRARY = "library"
+    /** A shelf's list: {section} is a [ReadingStatus] name or ALL; search=true focuses the search box. */
+    const val SHELF = "shelf/{section}?search={search}"
+    const val READING_ACTIVITY = "reading-activity"
+    /** The books read in {year}, or "undated" for read books without a read date. */
+    const val READ_YEAR = "reading-activity/{year}"
     const val ADD = "add?isbn={isbn}"
     const val EDIT = "edit/{id}"
     const val BOOK = "book/{id}"
@@ -65,6 +79,10 @@ object Routes {
     const val PROFILE = "profile/{id}"
     const val ACCOUNT = "account"
 
+    fun shelf(section: ReadingStatus?, search: Boolean = false) = "shelf/${section?.name ?: ALL_SHELF}?search=$search"
+    fun readYear(year: Int?) = "reading-activity/${year ?: UNDATED}"
+    const val ALL_SHELF = "ALL"
+    const val UNDATED = "undated"
     fun add(isbn: String? = null) = if (isbn == null) "add" else "add?isbn=$isbn"
     fun edit(id: Long) = "edit/$id"
     fun book(id: Long) = "book/$id"
@@ -88,17 +106,19 @@ fun MyBooksNavHost(container: AppContainer) {
 
     NavHost(nav, startDestination = Routes.LIBRARY) {
         composable(Routes.LIBRARY) {
-            val vm = viewModel { LibraryViewModel(container.repository, container.preferences) }
-            LibraryScreen(
-                viewModel = vm,
+            HomeScreen(
+                viewModel = viewModel { HomeViewModel(container.repository, container.challenges) },
                 snackbarHostState = snackbar,
                 onOpenBook = { nav.navigate(Routes.book(it)) },
+                onOpenShelf = { nav.navigate(Routes.shelf(it)) },
+                onSearch = { nav.navigate(Routes.shelf(null, search = true)) },
+                onOpenReadingActivity = { nav.navigate(Routes.READING_ACTIVITY) },
                 onAddManually = { nav.navigate(Routes.add()) },
                 onScan = {
                     scope.launch {
                         when (val outcome = services.scanner.scan()) {
                             is ScanOutcome.Isbn -> {
-                                val existing = vm.findByIsbn(outcome.isbn)
+                                val existing = container.repository.findByIsbn(outcome.isbn)
                                 nav.navigate(if (existing != null) Routes.book(existing.id) else Routes.add(outcome.isbn))
                             }
                             ScanOutcome.NotAnIsbn -> snackbar.showSnackbar("That barcode isn't a book ISBN")
@@ -111,6 +131,38 @@ fun MyBooksNavHost(container: AppContainer) {
                 onOpenFriends = social?.let { { nav.navigate(Routes.friends()) } },
                 onOpenActivity = social?.let { { nav.navigate(Routes.ACTIVITY) } },
                 onOpenReleases = { nav.navigate(Routes.RELEASES) },
+            )
+        }
+        composable(
+            Routes.SHELF,
+            arguments = listOf(
+                navArgument("section") { type = NavType.StringType },
+                navArgument("search") { type = NavType.BoolType; defaultValue = false },
+            ),
+        ) { entry ->
+            val section = ReadingStatus.entries.firstOrNull { it.name == entry.savedStateHandle.get<String>("section") }
+            LibraryScreen(
+                viewModel = viewModel { LibraryViewModel(container.repository, container.preferences, section) },
+                title = section.shelfLabel(),
+                onBack = { nav.popBackStack() },
+                onOpenBook = { nav.navigate(Routes.book(it)) },
+                focusSearch = entry.savedStateHandle.get<Boolean>("search") == true,
+            )
+        }
+        composable(Routes.READING_ACTIVITY) {
+            ReadingActivityScreen(
+                viewModel = viewModel { ReadingActivityViewModel(container.repository, container.challenges) },
+                onBack = { nav.popBackStack() },
+                onOpenBook = { nav.navigate(Routes.book(it)) },
+                onOpenYear = { nav.navigate(Routes.readYear(it)) },
+            )
+        }
+        composable(Routes.READ_YEAR, arguments = listOf(navArgument("year") { type = NavType.StringType })) { entry ->
+            val year = entry.savedStateHandle.get<String>("year")?.toIntOrNull()
+            ReadYearScreen(
+                viewModel = viewModel { ReadYearViewModel(container.repository, year) },
+                onBack = { nav.popBackStack() },
+                onOpenBook = { nav.navigate(Routes.book(it)) },
             )
         }
         composable(

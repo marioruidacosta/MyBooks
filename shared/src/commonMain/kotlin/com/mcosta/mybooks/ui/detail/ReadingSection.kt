@@ -100,7 +100,7 @@ fun ReadingSection(book: Book, viewModel: BookDetailViewModel) {
     }
 
     if (pickingDate) {
-        StartDatePicker(
+        DayPicker(
             initial = book.dateStarted ?: Clock.System.now().toEpochMilliseconds(),
             onPicked = { viewModel.setDateStarted(it); pickingDate = false },
             onDismiss = { pickingDate = false },
@@ -111,7 +111,7 @@ fun ReadingSection(book: Book, viewModel: BookDetailViewModel) {
 /** The date picker works in UTC midnights; convert to/from local-midnight epoch millis. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StartDatePicker(initial: Long, onPicked: (Long) -> Unit, onDismiss: () -> Unit) {
+internal fun DayPicker(initial: Long, onPicked: (Long) -> Unit, onDismiss: () -> Unit) {
     val zone = TimeZone.currentSystemDefault()
     val initialUtc = localDate(initial).atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
     val state = rememberDatePickerState(initialSelectedDateMillis = initialUtc)

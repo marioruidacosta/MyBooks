@@ -30,8 +30,10 @@ class LibraryViewModel(
     private val repo: BookRepository,
     /** Remembers the sort orders between launches; null keeps them for this session only. */
     private val prefs: Preferences? = null,
+    /** The shelf shown ([ReadingStatus] null is All books). */
+    section: ReadingStatus? = null,
 ) : ViewModel() {
-    private val tab = MutableStateFlow<ReadingStatus?>(null)
+    private val tab = MutableStateFlow(section)
     private val query = MutableStateFlow("")
     /** Each tab's own sort (All is the null tab), as saved. */
     private val sorts = MutableStateFlow(TABS.associateWith { SortChoice.decode(prefs?.get(key(it))) ?: SortChoice() })
@@ -48,10 +50,10 @@ class LibraryViewModel(
         query.value = q
     }
 
-    /** Sorts this tab by [order], in its usual direction: A to Z, or highest score first. */
+    /** Sorts this tab by [order], in its usual direction: A to Z, or newest or highest score first. */
     fun setSort(order: LibrarySort) {
         if (order == LibrarySort.SCORE && tab.value != ReadingStatus.READ) return
-        save(SortChoice(order, descending = order == LibrarySort.SCORE))
+        save(SortChoice(order, descending = order.newestOrHighestFirst))
     }
 
     fun setDescending(descending: Boolean) = save(sorts.value.getValue(tab.value).copy(descending = descending))

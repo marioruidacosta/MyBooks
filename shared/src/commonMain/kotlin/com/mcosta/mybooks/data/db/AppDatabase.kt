@@ -11,11 +11,12 @@ import androidx.sqlite.execSQL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 
-@Database(entities = [BookEntity::class, ShareStateEntity::class], version = 3, exportSchema = true)
+@Database(entities = [BookEntity::class, ShareStateEntity::class, ChallengeEntity::class], version = 4, exportSchema = true)
 @ConstructedBy(AppDatabaseConstructor::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
     abstract fun shareStateDao(): ShareStateDao
+    abstract fun challengeDao(): ChallengeDao
 }
 
 /** Implemented by Room's code generator for each platform. */
@@ -27,7 +28,7 @@ expect object AppDatabaseConstructor : RoomDatabaseConstructor<AppDatabase> {
 /** Finishes a platform's database builder: migrations, SQLite driver and IO dispatcher. */
 fun createDatabase(builder: RoomDatabase.Builder<AppDatabase>, driver: SQLiteDriver): AppDatabase =
     builder
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
         .setDriver(driver)
         .setQueryCoroutineContext(Dispatchers.IO)
         .build()
@@ -56,5 +57,13 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
                 "`beforeProgress` INTEGER, `beforeReview` TEXT, `pending` INTEGER NOT NULL, `excluded` INTEGER NOT NULL, " +
                 "`deleted` INTEGER NOT NULL, PRIMARY KEY(`bookId`))"
         )
+    }
+}
+
+/** v4: yearly reading challenges. */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(connection: SQLiteConnection) {
+        // Exactly the table Room generates (schemas/…/4.json).
+        connection.execSQL("CREATE TABLE IF NOT EXISTS `challenges` (`year` INTEGER NOT NULL, `goal` INTEGER NOT NULL, PRIMARY KEY(`year`))")
     }
 }

@@ -1,6 +1,7 @@
 package com.mcosta.mybooks.data.backup
 
 import com.mcosta.mybooks.domain.Book
+import com.mcosta.mybooks.domain.Challenge
 import com.mcosta.mybooks.domain.ReadingStatus
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
@@ -12,22 +13,34 @@ class BackupFormatException(message: String, cause: Throwable? = null) : Excepti
 data class BackupShare(val shareId: String, val excluded: Boolean)
 
 /**
- * Library backup file format: `{ "version": 1, "exportedAt": ..., "books": [...] }`. The review and sharing
- * fields are optional, so older backups stay readable and the version stays 1.
+ * Library backup file format: `{ "version": 1, "exportedAt": ..., "books": [...], "challenges": [...] }`. The review,
+ * sharing and challenge fields are optional, so older backups stay readable and the version stays 1.
  */
 object BackupSerializer {
     private const val VERSION = 1
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     /** [shares] is keyed by [Book.id]. */
-    fun encode(books: List<Book>, exportedAt: Long, shares: Map<Long, BackupShare> = emptyMap()): String =
-        json.encodeToString(BackupFile(VERSION, exportedAt, books.map { it.toBackup(shares[it.id]) }))
+    fun encode(
+        books: List<Book>,
+        exportedAt: Long,
+        shares: Map<Long, BackupShare> = emptyMap(),
+        challenges: List<Challenge> = emptyList(),
+    ): String = json.encodeToString(
+        BackupFile(VERSION, exportedAt, books.map { it.toBackup(shares[it.id]) }, challenges.map { BackupChallenge(it.year, it.goal) }),
+    )
 
     /** Throws [BackupFormatException] if [text] is not a valid version-1 backup. */
     fun decode(text: String): List<Book> = decodeWithShares(text).map { it.first }
 
     /** Each book with its sharing info, if the backup has it. Throws like [decode]. */
-    fun decodeWithShares(text: String): List<Pair<Book, BackupShare?>> {
+    fun decodeWithShares(text: String): List<Pair<Book, BackupShare?>> =
+        file(text).books.map { it.toBook() to it.shareId?.let { id -> BackupShare(id, it.shareExcluded) } }
+
+    /** The reading challenges (none in backups made before them). Throws like [decode]. */
+    fun decodeChallenges(text: String): List<Challenge> = file(text).challenges.map { Challenge(it.year, it.goal) }
+
+    private fun file(text: String): BackupFile {
         val file = try {
             json.decodeFromString<BackupFile>(text)
         } catch (e: SerializationException) {
@@ -36,11 +49,19 @@ object BackupSerializer {
             throw BackupFormatException("Not a MyBooks backup file", e)
         }
         if (file.version != VERSION) throw BackupFormatException("Unsupported backup version ${file.version}")
-        return file.books.map { it.toBook() to it.shareId?.let { id -> BackupShare(id, it.shareExcluded) } }
+        return file
     }
 
     @Serializable
-    private data class BackupFile(val version: Int, val exportedAt: Long = 0, val books: List<BackupBook> = emptyList())
+    private data class BackupFile(
+        val version: Int,
+        val exportedAt: Long = 0,
+        val books: List<BackupBook> = emptyList(),
+        val challenges: List<BackupChallenge> = emptyList(),
+    )
+
+    @Serializable
+    private data class BackupChallenge(val year: Int, val goal: Int)
 
     @Serializable
     private data class BackupBook(

@@ -3,6 +3,7 @@ package com.mcosta.mybooks
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
 import com.mcosta.mybooks.data.BookRepository
+import com.mcosta.mybooks.data.ChallengeRepository
 import com.mcosta.mybooks.data.CoverFinder
 import com.mcosta.mybooks.data.Preferences
 import com.mcosta.mybooks.data.SettingsPreferences
@@ -65,6 +66,9 @@ class AppContainer(
     /** Whether the signed-in user shares their reading activity; null without the community. */
     val sharingStatus: SharingStatus? = sharing?.status
 
+    /** Yearly reading challenges. */
+    val challenges = ChallengeRepository(database.challengeDao())
+
     val repository = BookRepository(
         dao = database.bookDao(),
         lookupService = LookupChain(
@@ -77,6 +81,7 @@ class AppContainer(
         transactionRunner = { block -> database.useWriterConnection { it.immediateTransaction { block() } } },
         coverStore = coverStore,
         shareTracker = sharing?.tracker,
+        challenges = challenges,
     )
 
     val preferences: Preferences? = appSettings?.let(::SettingsPreferences)
