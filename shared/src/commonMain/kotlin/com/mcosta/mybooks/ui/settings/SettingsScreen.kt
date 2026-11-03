@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,7 +53,7 @@ fun SettingsScreen(
         },
     ) { padding ->
         Column(
-            Modifier.padding(padding).padding(16.dp),
+            Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (accountLabel != null && onOpenAccount != null) {
@@ -82,6 +84,23 @@ fun SettingsScreen(
             ) {
                 Icon(Icons.Filled.Download, null)
                 Text("  Import library")
+            }
+            HorizontalDivider()
+            Text("Goodreads", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Goodreads can't sync automatically, but it can swap files. To bring your Goodreads books here, " +
+                    "export your library on goodreads.com (My Books, Import and export, Export Library) and import " +
+                    "that file. Matching books take Goodreads' shelf, rating, dates and review; your covers, notes " +
+                    "and progress stay. To update Goodreads, export for Goodreads and upload the file on the same page.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedButton(onClick = viewModel::importGoodreads, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.Download, null)
+                Text("  Import from Goodreads")
+            }
+            OutlinedButton(onClick = viewModel::exportGoodreads, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.Upload, null)
+                Text("  Export for Goodreads")
             }
         }
     }

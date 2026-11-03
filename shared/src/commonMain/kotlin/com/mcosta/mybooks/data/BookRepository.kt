@@ -8,6 +8,9 @@ import com.mcosta.mybooks.data.db.BookDao
 import com.mcosta.mybooks.data.db.searchPattern
 import com.mcosta.mybooks.data.db.toBook
 import com.mcosta.mybooks.data.db.toEntity
+import com.mcosta.mybooks.data.goodreads.GoodreadsCsv
+import com.mcosta.mybooks.data.goodreads.GoodreadsFormatException
+import com.mcosta.mybooks.data.releases.openLibraryCover
 import com.mcosta.mybooks.data.lookup.BookLookupService
 import com.mcosta.mybooks.data.lookup.LookupResult
 import com.mcosta.mybooks.domain.Book
@@ -204,6 +207,60 @@ class BookRepository(
                     val dateAdded = if (book.dateAdded > 0) book.dateAdded else clock()
                     val id = dao.insert(withStatusDates(book.copy(dateAdded = dateAdded)).toEntity())
                     if (share != null) shareTracker?.restored(id, share)
+                    added++
+                }
+            }
+        }
+        return ImportSummary(added, updated, failed)
+    }
+
+    /** The library as a Goodreads CSV (for goodreads.com's import). */
+    suspend fun exportGoodreads(): String = GoodreadsCsv.write(dao.getAll().map { it.toBook() })
+
+    /**
+     * Merges a Goodreads library export. A book already here (same ISBN, or same title and authors when it has
+     * none) takes Goodreads' shelf, date read, and its rating and review when Goodreads has them; other details
+     * are only filled in where empty, so covers, notes and progress stay. New books get Open Library's cover by
+     * ISBN. Like a backup restore, nothing is posted to the community. Throws [GoodreadsFormatException] before
+     * writing anything if [csv] is not a Goodreads export.
+     */
+    suspend fun importGoodreads(csv: String): ImportSummary {
+        val books = GoodreadsCsv.read(csv)
+        var added = 0
+        var updated = 0
+        var failed = 0
+        transactionRunner {
+            val seenIsbns = mutableSetOf<String>()
+            for (raw in books) {
+                val book = (validate(raw) as? Validation.Ok)?.book
+                if (book == null || (book.isbn != null && !seenIsbns.add(book.isbn))) {
+                    failed++
+                    continue
+                }
+                // Read without a date (common on Goodreads): the day it was shelved, not today.
+                val dateRead = book.dateRead ?: book.dateAdded.takeIf { book.status == ReadingStatus.READ && it > 0 }
+                val existing = (if (book.isbn != null) dao.findByIsbn(book.isbn) else null)
+                    ?: dao.findWithoutIsbn(book.title, book.authors.trim())
+                if (existing != null) {
+                    val mine = existing.toBook()
+                    val merged = mine.copy(
+                        status = book.status,
+                        dateRead = book.dateRead ?: mine.dateRead ?: dateRead,
+                        rating = book.rating ?: mine.rating,
+                        review = book.review.ifEmpty { mine.review },
+                        isbn = mine.isbn ?: book.isbn,
+                        authors = mine.authors.ifBlank { book.authors },
+                        publisher = mine.publisher ?: book.publisher,
+                        pageCount = mine.pageCount ?: book.pageCount,
+                        publishedYear = mine.publishedYear ?: book.publishedYear,
+                        notes = mine.notes.ifEmpty { book.notes },
+                    )
+                    dao.update(withStatusDates(merged).toEntity())
+                    updated++
+                } else {
+                    val cover = book.isbn?.let { openLibraryCover(it) }
+                    val dateAdded = if (book.dateAdded > 0) book.dateAdded else clock()
+                    dao.insert(withStatusDates(book.copy(coverUrl = cover, dateAdded = dateAdded, dateRead = dateRead)).toEntity())
                     added++
                 }
             }

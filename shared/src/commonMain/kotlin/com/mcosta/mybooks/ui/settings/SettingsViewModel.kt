@@ -32,6 +32,20 @@ class SettingsViewModel(
         "Imported: ${s.added} added, ${s.updated} updated, ${s.failed} failed"
     }
 
+    fun exportGoodreads() = run("Export failed") {
+        val csv = repo.exportGoodreads()
+        if (!documents.save("goodreads-${today()}.csv", "text/csv", csv.encodeToByteArray())) return@run null
+        val count = repo.bookCount()
+        "Exported $count ${if (count == 1) "book" else "books"} for Goodreads. Upload it on goodreads.com: My Books, Import and export."
+    }
+
+    fun importGoodreads() = run("Import failed") {
+        // Android file managers often label .csv files as Excel.
+        val bytes = documents.open(listOf("text/csv", "text/comma-separated-values", "application/vnd.ms-excel", "text/plain")) ?: return@run null
+        val s = repo.importGoodreads(bytes.decodeToString())
+        "Imported from Goodreads: ${s.added} added, ${s.updated} updated, ${s.failed} skipped"
+    }
+
     fun dismissMessage() {
         _message.value = null
     }
