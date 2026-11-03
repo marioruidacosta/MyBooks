@@ -88,7 +88,7 @@ fun MyBooksNavHost(container: AppContainer) {
 
     NavHost(nav, startDestination = Routes.LIBRARY) {
         composable(Routes.LIBRARY) {
-            val vm = viewModel { LibraryViewModel(container.repository) }
+            val vm = viewModel { LibraryViewModel(container.repository, container.preferences) }
             LibraryScreen(
                 viewModel = vm,
                 snackbarHostState = snackbar,
@@ -207,7 +207,7 @@ fun MyBooksNavHost(container: AppContainer) {
         composable(Routes.SETTINGS) {
             val session = social?.auth?.session?.collectAsStateWithLifecycle()?.value
             SettingsScreen(
-                viewModel = viewModel { SettingsViewModel(container.repository, services.documents) },
+                viewModel = viewModel { SettingsViewModel(container.repository, services.documents, covers = container.coverFinder) },
                 onBack = { nav.popBackStack() },
                 accountLabel = social?.let {
                     if (session is SessionState.SignedIn) "Your community account" else "Join the MyBooks community"

@@ -44,5 +44,8 @@ class FakeHttpServer {
 
     fun takeRequest(): RecordedRequest = requests.removeFirst()
 
+    /** Requests made and not yet taken. */
+    val requestCount: Int get() = requests.size
+
     fun httpClient(userAgent: String = "MyBooks-test"): HttpClient = lookupHttpClient(engine, userAgent)
 }

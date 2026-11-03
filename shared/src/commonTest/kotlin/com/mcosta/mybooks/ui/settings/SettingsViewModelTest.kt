@@ -99,4 +99,31 @@ class SettingsViewModelTest : MainDispatcherTest() {
         vm.dismissMessage()
         assertNull(vm.message.value)
     }
+
+    @Test
+    fun goodreadsExportSavesCsv() = runTest {
+        repo.save(Book(title = "Dune"))
+        val docs = FakeDocuments()
+        val vm = SettingsViewModel(repo, docs, today = { "2026-11-03" })
+        vm.exportGoodreads()
+        assertEquals("goodreads-2026-11-03.csv", docs.savedName)
+        assertEquals("text/csv", docs.savedMime)
+        assertTrue(docs.saved!!.decodeToString().startsWith("Title,Author,"))
+        assertEquals("Exported 1 book for Goodreads. Upload it on goodreads.com: My Books, Import and export.", vm.message.value)
+    }
+
+    @Test
+    fun goodreadsImportReportsSummary() = runTest {
+        val csv = "Title,Author,Exclusive Shelf\r\nDune,Frank Herbert,read\r\n,Nobody,to-read\r\n"
+        val vm = SettingsViewModel(repo, FakeDocuments(toOpen = csv.encodeToByteArray()))
+        vm.importGoodreads()
+        assertEquals("Imported from Goodreads: 1 added, 0 updated, 1 skipped", vm.message.value)
+    }
+
+    @Test
+    fun goodreadsImportOfAnotherFileExplains() = runTest {
+        val vm = SettingsViewModel(repo, FakeDocuments(toOpen = "{}".encodeToByteArray()))
+        vm.importGoodreads()
+        assertEquals("Import failed: Not a Goodreads library export", vm.message.value)
+    }
 }

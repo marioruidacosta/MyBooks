@@ -12,20 +12,28 @@ class OpenLibraryClient(
 ) : BookLookupService {
 
     override suspend fun lookup(isbn: String): LookupResult = lookupCatching {
-        val body = http.getOrNull("$baseUrl/isbn/$isbn.json") ?: return LookupResult.NotFound
+        val (edition, book) = edition(isbn) ?: return LookupResult.NotFound
+        LookupResult.Found(book.copy(authors = edition.authors.mapNotNull { authorName(it.key)?.let(::cleanText) }.joinToString(", ")))
+    }
+
+    /** The edition alone: the author requests are skipped. */
+    override suspend fun lookupCover(isbn: String): Book? =
+        (lookupCatching { edition(isbn)?.let { LookupResult.Found(it.second) } ?: LookupResult.NotFound } as? LookupResult.Found)
+            ?.book?.takeIf { it.coverUrl != null }
+
+    /** The edition and the book it describes (without author names), or null when Open Library hasn't it. */
+    private suspend fun edition(isbn: String): Pair<Edition, Book>? {
+        val body = http.getOrNull("$baseUrl/isbn/$isbn.json") ?: return null
         val edition = lookupJson.decodeFromString<Edition>(body)
-        val title = edition.title?.let(::cleanText)?.takeIf { it.isNotBlank() } ?: return LookupResult.NotFound
-        LookupResult.Found(
-            Book(
-                isbn = isbn,
-                title = title,
-                authors = edition.authors.mapNotNull { authorName(it.key)?.let(::cleanText) }.joinToString(", "),
-                publisher = edition.publishers.firstOrNull()?.let(::cleanText),
-                publishedYear = yearFrom(edition.publish_date),
-                pageCount = edition.number_of_pages,
-                // Only real covers: a cover-by-ISBN URL returns a blank 1x1 GIF when there is none.
-                coverUrl = edition.covers.firstOrNull { it > 0 }?.let { "$coversBaseUrl/b/id/$it-L.jpg" },
-            )
+        val title = edition.title?.let(::cleanText)?.takeIf { it.isNotBlank() } ?: return null
+        return edition to Book(
+            isbn = isbn,
+            title = title,
+            publisher = edition.publishers.firstOrNull()?.let(::cleanText),
+            publishedYear = yearFrom(edition.publish_date),
+            pageCount = edition.number_of_pages,
+            // Only real covers: a cover-by-ISBN URL returns a blank 1x1 GIF when there is none.
+            coverUrl = edition.covers.firstOrNull { it > 0 }?.let { "$coversBaseUrl/b/id/$it-L.jpg" },
         )
     }
 

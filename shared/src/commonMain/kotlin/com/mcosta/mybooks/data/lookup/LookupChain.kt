@@ -1,10 +1,29 @@
 package com.mcosta.mybooks.data.lookup
 
+import com.mcosta.mybooks.domain.Book
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+
 /**
  * Asks [sources] in order and returns the first book found. If that book has no cover, the remaining
  * sources are asked only for a cover, which is added to it.
  */
 class LookupChain(private val sources: List<BookLookupService>) : BookLookupService {
+
+    /**
+     * Asks every source at once (a book takes as long as the slowest source, not the sum) and keeps the
+     * earliest source's cover; once an earlier source has one, later ones aren't waited for.
+     */
+    override suspend fun lookupCover(isbn: String): Book? = coroutineScope {
+        val answers = sources.map { async { it.lookupCover(isbn) } }
+        var found: Book? = null
+        for (answer in answers) {
+            found = answer.await()
+            if (found != null) break
+        }
+        answers.forEach { it.cancel() }
+        found
+    }
 
     override suspend fun lookup(isbn: String): LookupResult {
         var firstError: Throwable? = null

@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Group
@@ -41,6 +44,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,12 +89,46 @@ fun LibraryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf(state.query) }
     var menuOpen by remember { mutableStateOf(false) }
+    var sortMenuOpen by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    // A new order or tab starts at the top. Otherwise the list keeps the book that was on top in view, and a
+    // reversed order moves it to the end, so the list seemed not to change. Saved so coming back from a book
+    // keeps the place.
+    val shown = "${state.tab}/${state.sort.encode()}"
+    var lastShown by rememberSaveable { mutableStateOf(shown) }
+    LaunchedEffect(shown) {
+        if (shown != lastShown) {
+            lastShown = shown
+            listState.scrollToItem(0)
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("MyBooks") },
                 actions = {
+                    Box {
+                        IconButton(onClick = { sortMenuOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
+                        DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                            for (order in state.sorts) {
+                                DropdownMenuItem(
+                                    text = { Text(order.label) },
+                                    leadingIcon = { if (order == state.sort.order) Icon(Icons.Filled.Check, "Selected") },
+                                    onClick = { sortMenuOpen = false; viewModel.setSort(order) },
+                                )
+                            }
+                            HorizontalDivider()
+                            for (descending in listOf(false, true)) {
+                                val order = state.sort.order
+                                DropdownMenuItem(
+                                    text = { Text(if (descending) order.descending else order.ascending) },
+                                    leadingIcon = { if (descending == state.sort.descending) Icon(Icons.Filled.Check, "Selected") },
+                                    onClick = { sortMenuOpen = false; viewModel.setDescending(descending) },
+                                )
+                            }
+                        }
+                    }
                     if (onOpenReleases != null) {
                         IconButton(onClick = onOpenReleases) { Icon(Icons.Filled.NewReleases, "New in Portugal") }
                     }
@@ -146,7 +184,7 @@ fun LibraryScreen(
                     Text("No books here yet", style = MaterialTheme.typography.bodyLarge)
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.fillMaxSize(), state = listState) {
                     items(state.books, key = { it.id }) { book ->
                         BookRow(book, onClick = { onOpenBook(book.id) })
                         HorizontalDivider()
@@ -172,6 +210,15 @@ private fun BookRow(book: Book, onClick: () -> Unit) {
                 Text(
                     book.authors,
                     style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            book.publisher?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

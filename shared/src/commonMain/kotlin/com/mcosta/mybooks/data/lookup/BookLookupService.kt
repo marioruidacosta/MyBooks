@@ -5,6 +5,9 @@ import com.mcosta.mybooks.domain.Book
 /** Finds book metadata for an ISBN-13. */
 interface BookLookupService {
     suspend fun lookup(isbn: String): LookupResult
+
+    /** The book only if this source has a cover for it (the cover search needs nothing else); null otherwise. */
+    suspend fun lookupCover(isbn: String): Book? = (lookup(isbn) as? LookupResult.Found)?.book?.takeIf { it.coverUrl != null }
 }
 
 sealed interface LookupResult {
